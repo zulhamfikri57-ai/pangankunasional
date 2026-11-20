@@ -44,6 +44,12 @@
         </a>
 
         <div class="flex items-center gap-2">
+            @if(auth()->user()->peran_sektor === 'admin')
+            <a href="{{ route('admin.dashboard') }}" class="px-2.5 py-1.5 rounded-xl bg-amber-400 text-emerald-950 text-xs font-extrabold">
+                🛡️ Admin
+            </a>
+            @endif
+
             <span class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold">
                 <span class="w-2 h-2 rounded-full bg-emerald-500"></span> ONLINE
             </span>
@@ -106,6 +112,14 @@
                 <a href="{{ route('profil') }}" class="flex items-center gap-3 px-4 py-2.5 lg:py-3 rounded-xl font-semibold text-sm transition {{ request()->routeIs('profil') ? 'bg-emerald-50 text-emerald-800' : 'text-stone-600 hover:bg-stone-50' }}">
                     <span>👤</span> Profil & Upgrade Akun
                 </a>
+
+                @if(auth()->user()->peran_sektor === 'admin')
+                <div class="pt-3 mt-3 border-t border-stone-200">
+                    <a href="{{ route('admin.dashboard') }}" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-emerald-950 font-extrabold text-xs shadow-xs transition">
+                        <span>🛡️</span> Kembali ke Panel Admin
+                    </a>
+                </div>
+                @endif
             </nav>
         </div>
 

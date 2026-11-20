@@ -48,6 +48,11 @@ class AuthController extends Controller
 
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
+
+            if (Auth::user()->peran_sektor === 'admin') {
+                return redirect()->route('admin.dashboard');
+            }
+
             return redirect()->intended(route('beranda'));
         }
 
