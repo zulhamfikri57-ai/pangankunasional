@@ -4,6 +4,13 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PanganController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\SiklusController;
+
+// Siklus Produksi, Jadwal Otomatis & Prediksi Panen
+    Route::get('/siklus', [SiklusController::class, 'index'])->name('siklus.index');
+    Route::post('/siklus', [SiklusController::class, 'store'])->name('siklus.store');
+    Route::patch('/jadwal/{id}/toggle', [SiklusController::class, 'toggleJadwal'])->name('jadwal.toggle');
+    Route::put('/siklus/{id}/selesai', [SiklusController::class, 'selesaikan'])->name('siklus.selesai');
 
 // Panel Khusus Administrator
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
@@ -33,14 +40,17 @@ Route::middleware('guest')->group(function () {
 
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 
-// Rute Terproteksi (Wajib Login)
-Route::middleware('auth')->group(function () {
-    Route::get('/', [PanganController::class, 'beranda'])->name('beranda');
+// RUTE PUBLIK (Bisa Diakses Tanpa Login)
+Route::get('/', [PanganController::class, 'beranda'])->name('beranda');
+Route::get('/harga', [PanganController::class, 'harga'])->name('harga');
+Route::get('/jual-hasil', [PanganController::class, 'jualHasil'])->name('jual');
+Route::get('/panduan', [PanganController::class, 'panduan'])->name('panduan');
 
+// RUTE FITUR PENGGUNA (Otomatis Disuruh Login Jika Belum Masuk)
+Route::middleware('auth')->group(function () {
     Route::get('/produksi', [PanganController::class, 'produksi'])->name('produksi');
     Route::post('/produksi', [PanganController::class, 'storeProduksi'])->name('produksi.store');
 
-    Route::get('/jual-hasil', [PanganController::class, 'jualHasil'])->name('jual');
     Route::post('/jual-hasil', [PanganController::class, 'storeJualHasil'])->name('jual.store');
     Route::put('/jual-hasil/{id}', [PanganController::class, 'updateJualHasil'])->name('jual.update');
     Route::delete('/jual-hasil/{id}', [PanganController::class, 'destroyJualHasil'])->name('jual.destroy');
@@ -51,12 +61,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/keuangan/{id}', [PanganController::class, 'destroyKeuangan'])->name('keuangan.destroy');
 
     Route::get('/laporan', [PanganController::class, 'laporan'])->name('laporan');
-    Route::get('/harga', [PanganController::class, 'harga'])->name('harga');
 
     Route::get('/pantauan', [PanganController::class, 'pantauan'])->name('pantauan');
     Route::post('/pantauan', [PanganController::class, 'storeAlert'])->name('pantauan.store');
 
-    Route::get('/panduan', [PanganController::class, 'panduan'])->name('panduan');
     Route::post('/panduan/tanya-pakar', [PanganController::class, 'tanyaPakar'])->name('panduan.tanya');
 
     Route::get('/profil', [PanganController::class, 'profil'])->name('profil');

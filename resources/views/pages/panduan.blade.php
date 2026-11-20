@@ -51,7 +51,7 @@
     </div>
 </div>
 
-<!-- BAGIAN 2: TANYA PAKAR PANGAN AI (SESUAI SEKTOR PENGGUNA) -->
+<!-- BAGIAN 2: TANYA PAKAR PANGAN AI -->
 <div class="bg-white rounded-3xl p-5 sm:p-7 shadow-sm border border-stone-100 mb-8">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <div>
@@ -61,11 +61,11 @@
             <p class="text-xs text-stone-500 mt-0.5">{{ $konteksPanduan['sub_pakar'] }}</p>
         </div>
         <span class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold w-fit">
-            Fokus: {{ $user->komoditas_utama ?: $konfig['label_peran'] }}
+            Fokus: {{ ($user && $user->komoditas_utama) ? $user->komoditas_utama : $konfig['label_peran'] }}
         </span>
     </div>
 
-    <!-- Pilihan Pertanyaan Cepat Khusus Jenis Akun -->
+    <!-- Pilihan Pertanyaan Cepat -->
     <div class="flex flex-wrap gap-2 mb-4">
         @foreach ($konteksPanduan['prompts'] as $promptText)
         <button type="button" onclick="isiPertanyaan('{{ addslashes($promptText) }}')"
@@ -75,32 +75,42 @@
         @endforeach
     </div>
 
-    <!-- Form Pertanyaan -->
-    <form id="formTanyaPakar" class="space-y-3">
-        @csrf
-        <textarea id="inputPertanyaan" rows="3" required
-            placeholder="{{ $konteksPanduan['placeholder'] }}"
-            class="w-full p-4 rounded-2xl border border-stone-200 text-sm focus:outline-none focus:border-emerald-600 bg-stone-50/50"></textarea>
-        
-        <div class="flex justify-end">
-            <button type="submit" id="btnKirimTanya"
-                class="w-full sm:w-auto px-6 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm shadow-sm transition cursor-pointer flex items-center justify-center gap-2">
-                <span>✨ Analisis & Beri Solusi</span>
-            </button>
-        </div>
-    </form>
+    @auth
+        <form id="formTanyaPakar" class="space-y-3">
+            @csrf
+            <textarea id="inputPertanyaan" rows="3" required
+                placeholder="{{ $konteksPanduan['placeholder'] }}"
+                class="w-full p-4 rounded-2xl border border-stone-200 text-sm focus:outline-none focus:border-emerald-600 bg-stone-50/50"></textarea>
+            
+            <div class="flex justify-end">
+                <button type="submit" id="btnKirimTanya"
+                    class="w-full sm:w-auto px-6 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm shadow-sm transition cursor-pointer flex items-center justify-center gap-2">
+                    <span>✨ Analisis & Beri Solusi</span>
+                </button>
+            </div>
+        </form>
 
-    <!-- Area Hasil Jawaban AI -->
-    <div id="boxJawabanAI" class="hidden mt-5 p-4 sm:p-5 rounded-2xl bg-emerald-50/70 border border-emerald-200">
-        <div class="flex items-center gap-2 mb-2">
-            <span class="text-lg">💡</span>
-            <h4 class="font-extrabold text-sm text-emerald-900">Rekomendasi Pakar ({{ $konfig['label_peran'] }}):</h4>
+        <div id="boxJawabanAI" class="hidden mt-5 p-4 sm:p-5 rounded-2xl bg-emerald-50/70 border border-emerald-200">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-lg">💡</span>
+                <h4 class="font-extrabold text-sm text-emerald-900">Rekomendasi Pakar ({{ $konfig['label_peran'] }}):</h4>
+            </div>
+            <div id="isiJawabanAI" class="text-xs sm:text-sm text-stone-800 leading-relaxed whitespace-pre-line"></div>
         </div>
-        <div id="isiJawabanAI" class="text-xs sm:text-sm text-stone-800 leading-relaxed whitespace-pre-line"></div>
-    </div>
+    @else
+        <div class="p-4 sm:p-5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+                <p class="font-bold text-sm text-stone-800">Fitur Konsultasi Pakar AI Memerlukan Akun</p>
+                <p class="text-xs text-stone-500 mt-0.5">Silakan masuk terlebih dahulu agar Pakar AI dapat menyesuaikan solusi dengan sektor usaha Anda.</p>
+            </div>
+            <a href="{{ route('login') }}" class="px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs text-center whitespace-nowrap">
+                🔑 Masuk untuk Bertanya
+            </a>
+        </div>
+    @endauth
 </div>
 
-<!-- BAGIAN 3: PANDUAN TEKNIS SESUAI JENIS AKUN -->
+<!-- BAGIAN 3: PANDUAN TEKNIS -->
 <div>
     <h3 class="font-extrabold text-sm sm:text-base text-stone-800 mb-3">📖 {{ $konteksPanduan['judul_panduan'] }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
@@ -121,45 +131,58 @@
 
 <script>
     function isiPertanyaan(teks) {
-        document.getElementById('inputPertanyaan').value = teks;
-        document.getElementById('inputPertanyaan').focus();
+        const input = document.getElementById('inputPertanyaan');
+        if (input) {
+            input.value = teks;
+            input.focus();
+        } else {
+            window.location.href = "{{ route('login') }}";
+        }
     }
 
-    document.getElementById('formTanyaPakar').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const pertanyaan = document.getElementById('inputPertanyaan').value.trim();
-        if (!pertanyaan) return;
+    const formTanya = document.getElementById('formTanyaPakar');
+    if (formTanya) {
+        formTanya.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const pertanyaan = document.getElementById('inputPertanyaan').value.trim();
+            if (!pertanyaan) return;
 
-        const btn = document.getElementById('btnKirimTanya');
-        const box = document.getElementById('boxJawabanAI');
-        const isi = document.getElementById('isiJawabanAI');
+            const btn = document.getElementById('btnKirimTanya');
+            const box = document.getElementById('boxJawabanAI');
+            const isi = document.getElementById('isiJawabanAI');
 
-        btn.disabled = true;
-        btn.innerHTML = '<span>⏳ Sedang menganalisis masalah...</span>';
-        box.classList.remove('hidden');
-        isi.textContent = 'Menghubungkan ke Pakar AI sektor {{ $konfig["label_peran"] }}...';
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳ Sedang menganalisis masalah...</span>';
+            box.classList.remove('hidden');
+            isi.textContent = 'Menghubungkan ke Pakar AI sektor {{ $konfig["label_peran"] }}...';
 
-        try {
-            const response = await fetch("{{ route('panduan.tanya') }}", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({ pertanyaan: pertanyaan })
-            });
+            try {
+                const response = await fetch("{{ route('panduan.tanya') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ pertanyaan: pertanyaan })
+                });
 
-            const data = await response.json();
-            isi.textContent = data.jawaban || 'Tidak ada respons dari server.';
-        } catch (error) {
-            isi.textContent = 'Gagal memproses permintaan. Pastikan koneksi internet aktif.';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<span>✨ Analisis & Beri Solusi</span>';
-        }
-    });
+                if (response.status === 401) {
+                    window.location.href = "{{ route('login') }}";
+                    return;
+                }
+
+                const data = await response.json();
+                isi.textContent = data.jawaban || 'Tidak ada respons dari server.';
+            } catch (error) {
+                isi.textContent = 'Gagal memproses permintaan. Pastikan koneksi internet aktif.';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>✨ Analisis & Beri Solusi</span>';
+            }
+        });
+    }
 </script>
 
 @endsection

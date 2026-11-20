@@ -15,8 +15,8 @@ class PanganController extends Controller
 {
     private function getKonfigurasiSektor($user)
     {
-        $peran = $user->peran_sektor ?? 'konsumen';
-        $komoditas = $user->komoditas_utama ?: 'Pangan Umum';
+        $peran = $user?->peran_sektor ?? 'konsumen';
+        $komoditas = $user?->komoditas_utama ?: 'Pangan Umum';
 
         return match ($peran) {
             'petani' => [
@@ -73,8 +73,8 @@ class PanganController extends Controller
             ],
             default => [
                 'ikon' => '🛒',
-                'label_peran' => 'Konsumen Pangan',
-                'siklus' => 'Pantauan Belanja Pangan 2026',
+                'label_peran' => $user ? 'Konsumen Pangan' : 'Pengunjung Umum',
+                'siklus' => 'Pantauan Pangan Nasional 2026',
                 'aksi_utama' => '📈 Cek Harga Hari Ini',
                 'aksi_jual' => 'Pasar Pangan',
                 'sektor_default' => 'darat',
@@ -82,7 +82,7 @@ class PanganController extends Controller
                 'kategori_masuk' => ['Anggaran Belanja Bulanan', 'Cashback / Hemat', 'Lain-lain'],
                 'info_ikon' => '📊',
                 'info_judul' => 'Info Ketersediaan & Tren Harga Pangan',
-                'info_desc' => 'Pasokan beras dan perikanan laut terpantau stabil minggu ini. Aktifkan Alert Harga untuk notifikasi.',
+                'info_desc' => 'Pasokan beras dan perikanan laut terpantau stabil minggu ini. Masuk untuk mengaktifkan Alert Harga.',
             ],
         };
     }
@@ -92,14 +92,28 @@ class PanganController extends Controller
         $user = auth()->user();
         $konfig = $this->getKonfigurasiSektor($user);
 
-        $totalPemasukan = Keuangan::where('user_id', $user->id)->where('jenis', 'pemasukan')->sum('nominal');
-        $totalPengeluaran = Keuangan::where('user_id', $user->id)->where('jenis', 'pengeluaran')->sum('nominal');
+        $totalPemasukan = $user ? Keuangan::where('user_id', $user->id)->where('jenis', 'pemasukan')->sum('nominal') : 0;
+        $totalPengeluaran = $user ? Keuangan::where('user_id', $user->id)->where('jenis', 'pengeluaran')->sum('nominal') : 0;
         $totalLaba = $totalPemasukan - $totalPengeluaran;
 
         $jam = now('Asia/Jakarta')->hour;
         $sapaan = $jam < 11 ? 'Selamat pagi' : ($jam < 15 ? 'Selamat siang' : ($jam < 18 ? 'Selamat sore' : 'Selamat malam'));
 
-        return view('pages.beranda', compact('user', 'konfig', 'totalLaba', 'totalPengeluaran', 'sapaan'));
+        $komoditasUnggulan = Komoditas::where('is_favorit', true)->take(4)->get();
+        if ($komoditasUnggulan->isEmpty()) {
+            $komoditasUnggulan = Komoditas::take(4)->get();
+        }
+        $totalListingPasar = ListingPanen::where('status', 'aktif')->count();
+
+        return view('pages.beranda', compact(
+            'user',
+            'konfig',
+            'totalLaba',
+            'totalPengeluaran',
+            'sapaan',
+            'komoditasUnggulan',
+            'totalListingPasar'
+        ));
     }
 
     public function produksi(Request $request)
@@ -149,28 +163,28 @@ class PanganController extends Controller
         $user = auth()->user();
         $konfig = $this->getKonfigurasiSektor($user);
 
-        // Filter komoditas sesuai sektor produsen (jika konsumen/pelaku pangan, tampilkan semua)
         $queryKomoditas = Komoditas::query();
-        if (in_array($user->peran_sektor, ['petani', 'peternak', 'nelayan'])) {
+        if ($user && in_array($user->peran_sektor, ['petani', 'peternak', 'nelayan'])) {
             $queryKomoditas->where('sektor', $konfig['sektor_default']);
         }
         $komoditas = $queryKomoditas->get();
         $semuaKomoditas = Komoditas::all();
 
-        // Listing milik pengguna yang sedang login
-        $listings = ListingPanen::with('komoditas')
-            ->where('user_id', $user->id)
-            ->latest()
-            ->get();
+        $listings = $user
+            ? ListingPanen::with('komoditas')->where('user_id', $user->id)->latest()->get()
+            : collect();
+
+        $siklusAktif = $user
+            ? \App\Models\SiklusProduksi::with('komoditas')->where('user_id', $user->id)->where('status', 'berjalan')->get()
+            : collect();
 
         $listingAktif = $listings->where('status', 'aktif');
         $totalPendapatan = $listingAktif->sum(fn($l) => $l->stok_kg * $l->harga_jual_per_kg);
 
-        // Etalase pasar dari seluruh produsen (berguna untuk konsumen & pelaku pangan)
         $pasarListings = ListingPanen::with(['komoditas', 'user'])
             ->where('status', 'aktif')
             ->latest()
-            ->take(12)
+            ->take(20)
             ->get();
 
         return view('pages.jual', compact(
@@ -179,6 +193,7 @@ class PanganController extends Controller
             'komoditas',
             'semuaKomoditas',
             'listings',
+            'siklusAktif',
             'listingAktif',
             'totalPendapatan',
             'pasarListings'
@@ -191,24 +206,35 @@ class PanganController extends Controller
             'komoditas_id' => 'required|exists:komoditas,id',
             'stok_kg' => 'required|numeric|min:1',
             'harga_jual_per_kg' => 'required|numeric|min:100',
+            'jenis_penjualan' => 'required|in:ready_stock,preorder',
+            'estimasi_siap' => 'nullable|date',
+            'lokasi_jual' => 'required|string|max:200',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'siklus_produksi_id' => 'nullable|exists:siklus_produksis,id',
         ]);
 
         ListingPanen::create([
             'user_id' => auth()->id(),
+            'siklus_produksi_id' => $request->siklus_produksi_id ?: null,
             'komoditas_id' => $request->komoditas_id,
             'stok_kg' => $request->stok_kg,
             'harga_jual_per_kg' => $request->harga_jual_per_kg,
+            'jenis_penjualan' => $request->jenis_penjualan,
+            'estimasi_siap' => $request->jenis_penjualan === 'preorder' ? $request->estimasi_siap : now()->toDateString(),
+            'lokasi_jual' => $request->lokasi_jual,
+            'latitude' => $request->latitude,
+            'longitude' => $request->longitude,
             'status' => 'aktif',
         ]);
 
-        return redirect()->route('jual')->with('success', 'Produk pangan Anda berhasil dipublikasikan ke pasar!');
+        return redirect()->route('jual')->with('success', 'Produk & titik lokasi penjualan berhasil dipublikasikan ke Marketplace!');
     }
 
     public function updateJualHasil(Request $request, $id)
     {
         $listing = ListingPanen::where('user_id', auth()->id())->findOrFail($id);
 
-        // Jika tombol "Tandai Terjual" diklik, otomatis catat juga ke pemasukan keuangan
         if ($request->input('aksi') === 'terjual') {
             $listing->update(['status' => 'terjual']);
 
@@ -404,7 +430,7 @@ class PanganController extends Controller
     public function panduan()
     {
         $user = auth()->user();
-        $peran = $user->peran_sektor ?? 'konsumen';
+        $peran = $user?->peran_sektor ?? 'konsumen';
         $konfig = $this->getKonfigurasiSektor($user);
 
         $panduans = PanduanTanam::where('sektor', $peran)->get();
@@ -459,7 +485,7 @@ class PanganController extends Controller
             ],
             default => [
                 'judul_panduan' => 'Panduan Belanja Cerdas & Penyimpanan Pangan Rumah Tangga',
-                'sub_pakar' => 'Tanya tips memilih bahan pangan segar, cara menyimpan agar awet, dan info tren harga',
+                'sub_pakar' => 'Tanya tips memilih bahan pangan segar, cara menyimpan agar awet, dan info tren harga (wajib login untuk bertanya)',
                 'placeholder' => 'Contoh: Bagaimana cara menyimpan cabai, bawang, dan ikan di kulkas agar awet berminggu-minggu?',
                 'sektor_komoditas' => null,
                 'prompts' => [
@@ -478,9 +504,14 @@ class PanganController extends Controller
         $komoditasList = $queryKomoditas->get();
 
         foreach ($komoditasList as $item) {
-            // Hitung stok milik akun pengguna yang sedang login
-            $totalProduksi = Produksi::where('user_id', $user->id)->where('komoditas_id', $item->id)->sum('jumlah');
-            $stokPasar = ListingPanen::where('user_id', $user->id)->where('komoditas_id', $item->id)->where('status', 'aktif')->sum('stok_kg');
+            $totalProduksi = $user
+                ? Produksi::where('user_id', $user->id)->where('komoditas_id', $item->id)->sum('jumlah')
+                : Produksi::where('komoditas_id', $item->id)->sum('jumlah');
+
+            $stokPasar = $user
+                ? ListingPanen::where('user_id', $user->id)->where('komoditas_id', $item->id)->where('status', 'aktif')->sum('stok_kg')
+                : ListingPanen::where('komoditas_id', $item->id)->where('status', 'aktif')->sum('stok_kg');
+
             $totalStok = $totalProduksi + $stokPasar;
 
             if ($totalStok >= 80 && $item->persentase_perubahan < 0) {
@@ -488,7 +519,7 @@ class PanganController extends Controller
                     'level' => 'tinggi',
                     'ikon' => '⚠️',
                     'judul' => "Risiko Surplus & Turunnya Harga {$item->nama}",
-                    'analisis' => "Stok pribadi Anda tercatat {$totalStok} {$item->satuan} sementara harga pasar turun {$item->persentase_perubahan}%. Jika tidak segera diserap, bahan pangan berisiko menumpuk, rusak, dan tersia-siakan.",
+                    'analisis' => "Tercatat stok {$totalStok} {$item->satuan} sementara harga pasar turun {$item->persentase_perubahan}%. Jika tidak segera diserap, bahan pangan berisiko menumpuk dan rusak.",
                     'rekomendasi' => $this->getRekomendasiSektor($peran, $item->nama),
                 ];
             } elseif ($totalStok >= 100) {
@@ -496,7 +527,7 @@ class PanganController extends Controller
                     'level' => 'sedang',
                     'ikon' => '📦',
                     'judul' => "Potensi Penumpukan Stok {$item->nama} ({$totalStok} {$item->satuan})",
-                    'analisis' => "Volume stok {$item->nama} Anda tergolong tinggi. Tanpa manajemen penyimpanan atau penjualan bertahap, kualitas bahan bisa menurun dalam 3–5 hari ke depan.",
+                    'analisis' => "Volume stok {$item->nama} tergolong tinggi. Tanpa manajemen penyimpanan atau penjualan bertahap, kualitas bahan bisa menurun dalam 3–5 hari ke depan.",
                     'rekomendasi' => $this->getRekomendasiSektor($peran, $item->nama),
                 ];
             }
