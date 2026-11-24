@@ -1,104 +1,209 @@
 @extends('layouts.app')
 @section('content')
 
-<h2 class="fluid-title font-extrabold text-stone-800 mb-5">Hasil Produksi</h2>
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+    <div>
+        <h2 class="fluid-title font-extrabold text-stone-800">🌾 Catatan Produksi & Hasil Panen</h2>
+        <p class="text-xs sm:text-sm text-stone-500 mt-0.5">Rekam realisasi panen harian/mingguan per sektor dan salurkan langsung ke pasar</p>
+    </div>
 
-<!-- Tab 3 Sektor -->
-<div class="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
-    <a href="{{ route('produksi', ['sektor' => 'darat']) }}"
-       class="p-3 sm:p-4 rounded-2xl border text-center font-bold text-xs sm:text-sm transition flex flex-col sm:flex-row items-center justify-center gap-1.5 {{ $sektor == 'darat' ? 'bg-emerald-700 text-white border-emerald-700 shadow' : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50' }}">
-        <span class="text-base sm:text-lg">🚜</span>
-        <span>Darat <span class="hidden sm:inline">(Tanaman)</span></span>
-    </a>
-    <a href="{{ route('produksi', ['sektor' => 'ternak']) }}"
-       class="p-3 sm:p-4 rounded-2xl border text-center font-bold text-xs sm:text-sm transition flex flex-col sm:flex-row items-center justify-center gap-1.5 {{ $sektor == 'ternak' ? 'bg-amber-700 text-white border-amber-700 shadow' : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50' }}">
-        <span class="text-base sm:text-lg">🐾</span>
-        <span>Ternak<span class="hidden sm:inline">/Daging</span></span>
-    </a>
-    <a href="{{ route('produksi', ['sektor' => 'laut']) }}"
-       class="p-3 sm:p-4 rounded-2xl border text-center font-bold text-xs sm:text-sm transition flex flex-col sm:flex-row items-center justify-center gap-1.5 {{ $sektor == 'laut' ? 'bg-cyan-700 text-white border-cyan-700 shadow' : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50' }}">
-        <span class="text-base sm:text-lg">🐟</span>
-        <span>Laut <span class="hidden sm:inline">& Ikan</span></span>
-    </a>
+    <!-- TAB SEKTOR -->
+    <div class="flex items-center gap-1.5 bg-white p-1.5 rounded-2xl border border-stone-200/80 w-fit">
+        <a href="{{ route('produksi', ['sektor' => 'darat']) }}"
+            class="px-3.5 py-2 rounded-xl text-xs font-bold transition {{ $sektor === 'darat' ? 'bg-emerald-700 text-white' : 'text-stone-600 hover:bg-stone-100' }}">
+            🌱 Pertanian
+        </a>
+        <a href="{{ route('produksi', ['sektor' => 'ternak']) }}"
+            class="px-3.5 py-2 rounded-xl text-xs font-bold transition {{ $sektor === 'ternak' ? 'bg-emerald-700 text-white' : 'text-stone-600 hover:bg-stone-100' }}">
+            🐾 Peternakan
+        </a>
+        <a href="{{ route('produksi', ['sektor' => 'laut']) }}"
+            class="px-3.5 py-2 rounded-xl text-xs font-bold transition {{ $sektor === 'laut' ? 'bg-emerald-700 text-white' : 'text-stone-600 hover:bg-stone-100' }}">
+            🐟 Perikanan
+        </a>
+    </div>
 </div>
 
-<!-- Banner Ringkasan -->
-<div class="rounded-3xl p-5 sm:p-6 text-white mb-6 shadow {{ $sektor == 'darat' ? 'bg-emerald-700' : ($sektor == 'ternak' ? 'bg-amber-700' : 'bg-cyan-700') }}">
-    <p class="text-xs sm:text-sm opacity-90">Total tangkapan/panen ({{ ucfirst($sektor) }})</p>
-    <p class="fluid-metric font-extrabold mt-1">{{ number_format($totalBerat, 0, ',', '.') }} kg</p>
-    <p class="text-xs opacity-85 mt-1">{{ $jumlahCatatan }} catatan tersimpan di database</p>
+<!-- RINGKASAN SEKTOR -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+    <div class="bg-white p-5 rounded-3xl border border-stone-100 shadow-xs">
+        <span class="text-xs font-bold text-stone-500">Total Volume Produksi ({{ ucfirst($sektor) }})</span>
+        <p class="font-extrabold text-xl text-emerald-700 mt-1">{{ number_format($totalBerat, 1, ',', '.') }} kg / unit</p>
+    </div>
+    <div class="bg-white p-5 rounded-3xl border border-stone-100 shadow-xs">
+        <span class="text-xs font-bold text-stone-500">Jumlah Catatan Panen</span>
+        <p class="font-extrabold text-xl text-stone-800 mt-1">{{ $jumlahCatatan }} Catatan</p>
+    </div>
 </div>
 
-<!-- Form Input Produksi -->
-<div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-stone-100 mb-6">
-    <h3 class="font-bold text-base sm:text-lg text-stone-800 mb-4">Catat Hasil {{ ucfirst($sektor) }}</h3>
-    <form action="{{ route('produksi.store') }}" method="POST" class="space-y-5">
+<!-- FORM CATAT PRODUKSI BARU -->
+<div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-100 shadow-xs mb-6">
+    <h3 class="font-extrabold text-base text-stone-800 mb-4">📝 Tambah Catatan Hasil Produksi</h3>
+
+    <form action="{{ route('produksi.store') }}" method="POST" class="space-y-4">
         @csrf
         <input type="hidden" name="sektor" value="{{ $sektor }}">
 
-        <div>
-            <label class="block text-xs sm:text-sm font-bold text-stone-700 mb-3">Pilih Komoditas</label>
-            <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5 sm:gap-3">
-                @foreach ($komoditas as $item)
-                    <label class="cursor-pointer">
-                        <input type="radio" name="komoditas_id" value="{{ $item->id }}" class="peer sr-only" required {{ $loop->first ? 'checked' : '' }}>
-                        <div class="p-3 rounded-2xl border-2 border-stone-200 peer-checked:border-emerald-600 peer-checked:bg-emerald-50 text-center transition h-full flex flex-col items-center justify-center">
-                            <div class="text-xl sm:text-2xl mb-1">{{ $item->ikon }}</div>
-                            <div class="text-xs font-bold text-stone-800 leading-tight">{{ $item->nama }}</div>
-                        </div>
-                    </label>
-                @endforeach
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1">Jumlah</label>
-                <input type="number" step="0.1" name="jumlah" placeholder="Contoh: 120" required
-                       class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm focus:outline-none focus:border-emerald-600">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1">Satuan</label>
-                <select name="satuan" class="w-full px-4 py-3 rounded-xl border border-stone-300 bg-white text-sm">
-                    <option value="kg">kg</option>
-                    <option value="kuintal">kuintal</option>
-                    <option value="ton">ton</option>
+                <label class="block text-xs font-bold text-stone-600 mb-1">Komoditas</label>
+                <select name="komoditas_id" required class="w-full px-4 py-3 rounded-xl border border-stone-300 bg-white text-sm font-semibold">
+                    @foreach($komoditas as $km)
+                        <option value="{{ $km->id }}">{{ $km->ikon ?? '🌱' }} {{ $km->nama }}</option>
+                    @endforeach
                 </select>
             </div>
+
             <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1">Tanggal</label>
+                <label class="block text-xs font-bold text-stone-600 mb-1">Jumlah Hasil</label>
+                <input type="number" step="0.1" name="jumlah" placeholder="Contoh: 120" required
+                    class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1">Satuan</label>
+                <select name="satuan" class="w-full px-4 py-3 rounded-xl border border-stone-300 bg-white text-sm font-semibold">
+                    <option value="kg">Kilogram (kg)</option>
+                    <option value="ton">Ton</option>
+                    <option value="ekor">Ekor</option>
+                    <option value="butir">Butir / Krat</option>
+                    <option value="liter">Liter</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1">Tanggal Panen</label>
                 <input type="date" name="tanggal_panen" value="{{ date('Y-m-d') }}" required
-                       class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
+                    class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
             </div>
         </div>
 
-        <button type="submit" class="w-full py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm transition cursor-pointer">
-            Simpan Catatan Produksi
-        </button>
+        <div class="flex flex-col sm:flex-row gap-3">
+            <input type="text" name="catatan" placeholder="Catatan mutu / sortasi (misal: Grade A segar, panen pagi)..."
+                class="flex-1 px-4 py-3 rounded-xl border border-stone-300 text-sm">
+            <button type="submit" class="px-6 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm transition cursor-pointer">
+                Simpan Produksi →
+            </button>
+        </div>
     </form>
 </div>
 
-<!-- Riwayat Produksi Sektor Ini -->
-<div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-stone-100">
-    <h3 class="font-bold text-stone-800 mb-3 text-sm sm:text-base">Riwayat Pencatatan ({{ ucfirst($sektor) }})</h3>
+<!-- RIWAYAT PRODUKSI -->
+<div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-100 shadow-xs">
+    <h3 class="font-extrabold text-base text-stone-800 mb-4">Riwayat Hasil Produksi ({{ $riwayat->count() }})</h3>
+
     <div class="divide-y divide-stone-100">
-        @forelse ($riwayat as $r)
-            <div class="py-3 flex items-center justify-between gap-2">
-                <div class="flex items-center gap-3 min-w-0">
-                    <span class="text-xl sm:text-2xl flex-shrink-0">{{ $r->komoditas->ikon ?? '📦' }}</span>
-                    <div class="min-w-0">
-                        <p class="font-bold text-sm text-stone-800 truncate">{{ $r->komoditas->nama ?? 'Komoditas' }}</p>
-                        <p class="text-xs text-stone-400">{{ $r->tanggal_panen }}</p>
-                    </div>
+        @forelse($riwayat as $item)
+        <div class="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="text-base">{{ $item->komoditas->ikon ?? '🌾' }}</span>
+                    <span class="font-extrabold text-sm text-stone-800">{{ $item->komoditas->nama ?? 'Komoditas' }}</span>
+                    <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold">
+                        {{ number_format($item->jumlah, 1, ',', '.') }} {{ $item->satuan }}
+                    </span>
                 </div>
-                <span class="font-extrabold text-sm text-emerald-700 whitespace-nowrap">
-                    {{ number_format($r->jumlah, 0, ',', '.') }} {{ $r->satuan }}
-                </span>
+                <p class="text-xs text-stone-500 mt-1">
+                    📅 {{ \Carbon\Carbon::parse($item->tanggal_panen)->format('d M Y') }}
+                    {{ $item->catatan ? '• ' . $item->catatan : '' }}
+                </p>
             </div>
+
+            <div class="flex flex-wrap items-center gap-1.5">
+                <a href="{{ route('jual', ['komoditas_id' => $item->komoditas_id, 'stok_kg' => $item->jumlah]) }}"
+                    class="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold transition">
+                    🏪 Jual ke Pasar
+                </a>
+
+                <button type="button" onclick='bukaModalEditProduksi(@json($item))'
+                    class="px-2.5 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-bold transition cursor-pointer">
+                    ✏️ Edit
+                </button>
+
+                <form action="{{ route('produksi.destroy', $item->id) }}" method="POST" onsubmit="return confirm('Hapus catatan produksi ini?')">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold transition cursor-pointer">
+                        🗑️
+                    </button>
+                </form>
+            </div>
+        </div>
         @empty
-            <p class="text-xs text-stone-500 py-4 text-center">Belum ada catatan produksi untuk sektor ini.</p>
+        <p class="text-xs text-stone-500 py-6 text-center">Belum ada catatan hasil produksi pada sektor ini.</p>
         @endforelse
     </div>
 </div>
+
+<!-- MODAL EDIT CATATAN PRODUKSI -->
+<div id="modalEditProduksi" class="fixed inset-0 z-50 bg-black/50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-extrabold text-base text-stone-800">✏️ Edit Catatan Produksi</h3>
+            <button type="button" onclick="tutupModalProduksi()" class="text-stone-400 hover:text-stone-700 font-bold">✕</button>
+        </div>
+
+        <form id="formEditProduksi" method="POST" class="space-y-4">
+            @csrf
+            @method('PUT')
+
+            <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1">Komoditas</label>
+                <select id="editProdKomoditas" name="komoditas_id" required class="w-full px-4 py-2.5 rounded-xl border border-stone-300 bg-white text-sm font-semibold">
+                    @foreach($komoditas as $km)
+                        <option value="{{ $km->id }}">{{ $km->ikon ?? '🌱' }} {{ $km->nama }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-bold text-stone-600 mb-1">Jumlah Hasil</label>
+                    <input type="number" step="0.1" id="editProdJumlah" name="jumlah" required class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-sm font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-stone-600 mb-1">Satuan</label>
+                    <input type="text" id="editProdSatuan" name="satuan" required class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-sm">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1">Tanggal Panen</label>
+                <input type="date" id="editProdTanggal" name="tanggal_panen" required class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-sm">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-stone-600 mb-1">Catatan Mutu</label>
+                <input type="text" id="editProdCatatan" name="catatan" class="w-full px-4 py-2.5 rounded-xl border border-stone-300 text-sm">
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="tutupModalProduksi()" class="px-4 py-2.5 rounded-xl bg-stone-100 text-stone-700 text-xs font-bold cursor-pointer">Batal</button>
+                <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold cursor-pointer">Simpan Perubahan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function bukaModalEditProduksi(item) {
+        document.getElementById('formEditProduksi').action = `/produksi/${item.id}`;
+        document.getElementById('editProdKomoditas').value = item.komoditas_id;
+        document.getElementById('editProdJumlah').value = item.jumlah;
+        document.getElementById('editProdSatuan').value = item.satuan || 'kg';
+        document.getElementById('editProdTanggal').value = (item.tanggal_panen || '').substring(0, 10);
+        document.getElementById('editProdCatatan').value = item.catatan || '';
+
+        const modal = document.getElementById('modalEditProduksi');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function tutupModalProduksi() {
+        const modal = document.getElementById('modalEditProduksi');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+</script>
 
 @endsection

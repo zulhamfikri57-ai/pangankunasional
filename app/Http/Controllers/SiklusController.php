@@ -14,279 +14,226 @@ class SiklusController extends Controller
     public function index()
     {
         $user = auth()->user();
-        $peran = $user->peran_sektor ?? 'petani';
 
-        $sektorDefault = match ($peran) {
-            'peternak' => 'ternak',
-            'nelayan' => 'laut',
-            'pelaku_pangan' => 'olahan',
-            default => 'darat',
-        };
-
-        $komoditas = in_array($peran, ['petani', 'peternak', 'nelayan'])
-            ? Komoditas::where('sektor', $sektorDefault)->get()
-            : Komoditas::all();
-
-        $siklusBerjalan = SiklusProduksi::with(['komoditas', 'jadwals'])
+        $siklusList = SiklusProduksi::with(['komoditas', 'jadwals'])
             ->where('user_id', $user->id)
-            ->where('status', 'berjalan')
-            ->latest()
+            ->latest('tanggal_mulai')
+            ->latest('id')
             ->get();
 
-        $siklusSelesai = SiklusProduksi::with(['komoditas'])
-            ->where('user_id', $user->id)
-            ->where('status', 'selesai')
-            ->latest('tanggal_panen_aktual')
-            ->get();
+        $komoditasList = Komoditas::orderBy('sektor')->orderBy('nama')->get();
 
-        $jadwalMendatang = JadwalPerawatan::with('siklus.komoditas')
-            ->where('user_id', $user->id)
-            ->where('status', 'menunggu')
-            ->orderBy('tanggal_jadwal')
-            ->take(10)
-            ->get();
-
-        return view('pages.siklus', compact(
-            'user',
-            'peran',
-            'sektorDefault',
-            'komoditas',
-            'siklusBerjalan',
-            'siklusSelesai',
-            'jadwalMendatang'
-        ));
+        return view('pages.siklus', compact('user', 'siklusList', 'komoditasList'));
     }
 
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'komoditas_id' => 'required|exists:komoditas,id',
-            'nama_siklus' => 'required|string|max:120',
+            'nama_siklus' => 'required|string|max:150',
             'tanggal_mulai' => 'required|date',
-            'luas_atau_kapasitas' => 'required|numeric|min:0.01',
+            'luas_atau_kapasitas' => 'required|numeric|min:0.1',
             'satuan_kapasitas' => 'required|string|max:30',
+            'alamat_lahan' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
-            'alamat_lahan' => 'nullable|string|max:200',
         ]);
 
-        $user = auth()->user();
-        $komoditas = Komoditas::findOrFail($request->komoditas_id);
-        $mulai = Carbon::parse($request->tanggal_mulai);
-        $kapasitas = (float) $request->luas_atau_kapasitas;
-        $satuan = $request->satuan_kapasitas;
+        $komoditas = Komoditas::findOrFail($validated['komoditas_id']);
+        $tanggalMulai = Carbon::parse($validated['tanggal_mulai']);
 
-        // Hitung prediksi hasil & durasi otomatis sesuai sektor dan komoditas
-        $prediksi = $this->hitungPrediksiDanJadwal($komoditas, $mulai, $kapasitas, $satuan);
+        // Estimasi lama siklus (hari) & proyeksi panen berdasarkan sektor/komoditas
+        $durasiHari = match ($komoditas->sektor) {
+            'darat' => 75,
+            'ternak' => 45,
+            'laut' => 60,
+            default => 60,
+        };
+
+        $faktorHasil = match ($validated['satuan_kapasitas']) {
+            'hektar' => 8000,
+            'm2' => 0.8,
+            'ekor' => 1.8,
+            'kolam' => 500,
+            'kapal' => 250,
+            default => 1,
+        };
+
+        $estimasiTanggalPanen = $tanggalMulai->copy()->addDays($durasiHari);
+        $estimasiHasilKg = round($validated['luas_atau_kapasitas'] * $faktorHasil, 1);
 
         $siklus = SiklusProduksi::create([
-            'user_id' => $user->id,
+            'user_id' => auth()->id(),
             'komoditas_id' => $komoditas->id,
-            'nama_siklus' => $request->nama_siklus,
-            'sektor' => $komoditas->sektor ?? 'darat',
-            'tanggal_mulai' => $mulai->toDateString(),
-            'estimasi_tanggal_panen' => $prediksi['estimasi_panen']->toDateString(),
-            'luas_atau_kapasitas' => $kapasitas,
-            'satuan_kapasitas' => $satuan,
-            'estimasi_hasil_kg' => $prediksi['estimasi_kg'],
-            'latitude' => $request->latitude,
-            'longitude' => $request->longitude,
-            'alamat_lahan' => $request->alamat_lahan,
+            'nama_siklus' => $validated['nama_siklus'],
+            'tanggal_mulai' => $tanggalMulai->toDateString(),
+            'estimasi_tanggal_panen' => $estimasiTanggalPanen->toDateString(),
+            'luas_atau_kapasitas' => $validated['luas_atau_kapasitas'],
+            'satuan_kapasitas' => $validated['satuan_kapasitas'],
+            'estimasi_hasil_kg' => $estimasiHasilKg,
+            'alamat_lahan' => $validated['alamat_lahan'] ?? null,
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
             'status' => 'berjalan',
         ]);
 
-        // Simpan seluruh jadwal perawatan / pemupukan otomatis
-        foreach ($prediksi['jadwals'] as $j) {
+        // Generate jadwal perawatan otomatis berdasarkan sektor komoditas
+        $templateJadwal = $this->getTemplateJadwal($komoditas->sektor, $komoditas->nama, $durasiHari);
+
+        foreach ($templateJadwal as $item) {
             JadwalPerawatan::create([
                 'siklus_produksi_id' => $siklus->id,
-                'user_id' => $user->id,
-                'judul_kegiatan' => $j['judul'],
-                'jenis_kegiatan' => $j['jenis'],
-                'tanggal_jadwal' => $j['tanggal']->toDateString(),
-                'dosis_atau_catatan' => $j['catatan'],
+                'user_id' => auth()->id(),
+                'judul_kegiatan' => $item['judul'],
+                'jenis_kegiatan' => $item['jenis'],
+                'tanggal_jadwal' => $tanggalMulai->copy()->addDays($item['hari_ke'])->toDateString(),
+                'dosis_atau_catatan' => $item['catatan'],
                 'status' => 'menunggu',
             ]);
         }
+        app(\App\Services\HargaSyncService::class)->sinkronkanSemua();
+        return redirect()->route('siklus.index')->with(
+            'success',
+            "Siklus \"{$siklus->nama_siklus}\" berhasil dibuat beserta " . count($templateJadwal) . " jadwal perawatan otomatis!"
+        );
+    }
 
-        return redirect()->route('siklus.index')->with('success', 'Rencana siklus & jadwal perawatan otomatis berhasil dibuat!');
+    public function update(Request $request, $id)
+    {
+        $siklus = SiklusProduksi::where('user_id', auth()->id())->findOrFail($id);
+
+        $validated = $request->validate([
+            'nama_siklus' => 'required|string|max:150',
+            'tanggal_mulai' => 'required|date',
+            'estimasi_tanggal_panen' => 'required|date',
+            'luas_atau_kapasitas' => 'required|numeric|min:0.1',
+            'satuan_kapasitas' => 'required|string|max:30',
+            'estimasi_hasil_kg' => 'required|numeric|min:0.1',
+            'alamat_lahan' => 'nullable|string|max:255',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'status' => 'required|in:berjalan,selesai,gagal',
+        ]);
+
+        $siklus->update($validated);
+
+        return redirect()->route('siklus.index')->with('success', "Parameter siklus \"{$siklus->nama_siklus}\" berhasil diperbarui!");
+    }
+
+    public function selesaikan(Request $request, $id)
+    {
+        $siklus = SiklusProduksi::with('komoditas')->where('user_id', auth()->id())->findOrFail($id);
+
+        $validated = $request->validate([
+            'status' => 'required|in:selesai,gagal',
+            'tanggal_panen_aktual' => 'required|date',
+            'hasil_aktual_kg' => 'required|numeric|min:0',
+        ]);
+
+        $siklus->update([
+            'status' => $validated['status'],
+            'tanggal_panen_aktual' => $validated['tanggal_panen_aktual'],
+            'hasil_aktual_kg' => $validated['hasil_aktual_kg'],
+        ]);
+
+        // Otomatis catat ke tabel Produksi jika siklus selesai & ada hasil panen
+        if ($validated['status'] === 'selesai' && $validated['hasil_aktual_kg'] > 0) {
+            Produksi::updateOrCreate(
+                ['siklus_produksi_id' => $siklus->id],
+                [
+                    'user_id' => auth()->id(),
+                    'komoditas_id' => $siklus->komoditas_id,
+                    'sektor' => $siklus->komoditas->sektor ?? 'darat',
+                    'jumlah' => $validated['hasil_aktual_kg'],
+                    'satuan' => $siklus->komoditas->satuan ?? 'kg',
+                    'tanggal_panen' => $validated['tanggal_panen_aktual'],
+                    'catatan' => "Otomatis dari Siklus: {$siklus->nama_siklus}",
+                ]
+            );
+        }
+
+        $pesan = $validated['status'] === 'selesai'
+            ? "Panen siklus \"{$siklus->nama_siklus}\" ({$validated['hasil_aktual_kg']} kg) otomatis tercatat di Catatan Produksi & siap dipasarkan!"
+            : "Status siklus \"{$siklus->nama_siklus}\" diperbarui menjadi Gagal Panen untuk evaluasi modal.";
+
+        app(\App\Services\HargaSyncService::class)->sinkronkanSemua();
+        return redirect()->route('siklus.index')->with('success', $pesan);
+    }
+
+    public function destroy($id)
+    {
+        $siklus = SiklusProduksi::where('user_id', auth()->id())->findOrFail($id);
+        $nama = $siklus->nama_siklus;
+
+        JadwalPerawatan::where('siklus_produksi_id', $siklus->id)->delete();
+        $siklus->delete();
+
+        return redirect()->route('siklus.index')->with('success', "Siklus \"{$nama}\" beserta jadwal perawatannya telah dihapus.");
+    }
+
+    public function storeJadwal(Request $request, $siklusId)
+    {
+        $siklus = SiklusProduksi::where('user_id', auth()->id())->findOrFail($siklusId);
+
+        $validated = $request->validate([
+            'judul_kegiatan' => 'required|string|max:150',
+            'jenis_kegiatan' => 'required|string|max:50',
+            'tanggal_jadwal' => 'required|date',
+            'dosis_atau_catatan' => 'nullable|string|max:500',
+        ]);
+
+        JadwalPerawatan::create([
+            'siklus_produksi_id' => $siklus->id,
+            'user_id' => auth()->id(),
+            'judul_kegiatan' => $validated['judul_kegiatan'],
+            'jenis_kegiatan' => $validated['jenis_kegiatan'],
+            'tanggal_jadwal' => $validated['tanggal_jadwal'],
+            'dosis_atau_catatan' => $validated['dosis_atau_catatan'],
+            'status' => 'menunggu',
+        ]);
+
+        return redirect()->route('siklus.index')->with('success', 'Jadwal perawatan tambahan berhasil ditambahkan!');
     }
 
     public function toggleJadwal($id)
     {
         $jadwal = JadwalPerawatan::where('user_id', auth()->id())->findOrFail($id);
-        $jadwal->status = $jadwal->status === 'menunggu' ? 'selesai' : 'menunggu';
-        $jadwal->save();
+        $jadwal->update([
+            'status' => $jadwal->status === 'selesai' ? 'menunggu' : 'selesai',
+        ]);
 
-        return redirect()->route('siklus.index')->with('success', 'Status jadwal kegiatan berhasil diperbarui!');
+        return redirect()->route('siklus.index')->with('success', 'Status checklist perawatan berhasil diperbarui!');
     }
 
-    public function selesaikan(Request $request, $id)
+    public function destroyJadwal($id)
     {
-        $request->validate([
-            'hasil_aktual_kg' => 'required|numeric|min:0.1',
-            'tanggal_panen_aktual' => 'required|date',
-        ]);
+        $jadwal = JadwalPerawatan::where('user_id', auth()->id())->findOrFail($id);
+        $jadwal->delete();
 
-        $siklus = SiklusProduksi::where('user_id', auth()->id())->findOrFail($id);
-        $siklus->update([
-            'hasil_aktual_kg' => $request->hasil_aktual_kg,
-            'tanggal_panen_aktual' => $request->tanggal_panen_aktual,
-            'status' => 'selesai',
-        ]);
-
-        // Tandai sisa jadwal panen selesai
-        JadwalPerawatan::where('siklus_produksi_id', $siklus->id)->update(['status' => 'selesai']);
-
-        // Otomatis catat ke riwayat produksi utama
-        Produksi::create([
-            'user_id' => auth()->id(),
-            'komoditas_id' => $siklus->komoditas_id,
-            'sektor' => $siklus->sektor,
-            'jumlah' => $request->hasil_aktual_kg,
-            'satuan' => 'kg',
-            'tanggal_panen' => $request->tanggal_panen_aktual,
-            'catatan' => "Realisasi Panen: {$siklus->nama_siklus}",
-        ]);
-
-        return redirect()->route('siklus.index')->with('success', 'Panen selesai dicatat! Hasil aktual otomatis tersimpan ke data Produksi.');
+        return redirect()->route('siklus.index')->with('success', 'Item jadwal perawatan berhasil dihapus.');
     }
 
-    private function hitungPrediksiDanJadwal(Komoditas $komoditas, Carbon $mulai, float $kapasitas, string $satuan): array
+    private function getTemplateJadwal(string $sektor, string $namaKomoditas, int $durasiHari): array
     {
-        $nama = strtolower($komoditas->nama);
-        $sektor = $komoditas->sektor;
-
-        // Konversi luas ke meter persegi untuk pertanian
-        $luasM2 = match ($satuan) {
-            'hektar' => $kapasitas * 10000,
-            'rante' => $kapasitas * 400,
-            default => $kapasitas,
-        };
-
-        if ($sektor === 'ternak') {
-            $isAyam = str_contains($nama, 'ayam') || str_contains($nama, 'bebek');
-            $hariPanen = $isAyam ? 35 : 90;
-            $estimasiKg = $isAyam ? round($kapasitas * 1.85, 1) : round($kapasitas * 28, 1);
-            $pakanKg = round($kapasitas * ($isAyam ? 3.2 : 45), 1);
-
-            return [
-                'estimasi_panen' => $mulai->copy()->addDays($hariPanen),
-                'estimasi_kg' => $estimasiKg,
-                'jadwals' => [
-                    [
-                        'judul' => 'Vaksinasi Awal & Vitamin Anti-Stres',
-                        'jenis' => 'pakan_vaksin',
-                        'tanggal' => $mulai->copy()->addDays(4),
-                        'catatan' => "Berikan vitamin & vaksin tahap pertama untuk {$kapasitas} {$satuan}.",
-                    ],
-                    [
-                        'judul' => 'Pergantian Pakan Grower & Cek Bobot',
-                        'jenis' => 'pakan_vaksin',
-                        'tanggal' => $mulai->copy()->addDays((int) round($hariPanen * 0.45)),
-                        'catatan' => "Kebutuhan pakan fase pembesaran sekitar {$pakanKg} kg total siklus.",
-                    ],
-                    [
-                        'judul' => 'Vaksin Booster & Sanitasi Kandang',
-                        'jenis' => 'perawatan',
-                        'tanggal' => $mulai->copy()->addDays((int) round($hariPanen * 0.7)),
-                        'catatan' => 'Semprot disinfektan area kandang dan pastikan sirkulasi udara optimal.',
-                    ],
-                    [
-                        'judul' => "Perkiraan Panen {$komoditas->nama}",
-                        'jenis' => 'panen',
-                        'tanggal' => $mulai->copy()->addDays($hariPanen),
-                        'catatan' => "Target bobot panen estimasi {$estimasiKg} kg.",
-                    ],
-                ],
-            ];
-        }
-
-        if ($sektor === 'laut') {
-            $hariPanen = 75;
-            $estimasiKg = $satuan === 'kolam' ? round($kapasitas * 450, 1) : round($luasM2 * 2.5, 1);
-
-            return [
-                'estimasi_panen' => $mulai->copy()->addDays($hariPanen),
-                'estimasi_kg' => $estimasiKg,
-                'jadwals' => [
-                    [
-                        'judul' => 'Cek pH Air, Oksigen Terlarut & Plankton',
-                        'jenis' => 'perawatan',
-                        'tanggal' => $mulai->copy()->addDays(10),
-                        'catatan' => 'Pastikan pH air di kisaran 7.5–8.2 dan salinitas stabil.',
-                    ],
-                    [
-                        'judul' => 'Sampling Pertumbuhan & Penyesuaian Pakan',
-                        'jenis' => 'pakan_vaksin',
-                        'tanggal' => $mulai->copy()->addDays(35),
-                        'catatan' => 'Timbang sampel 10–20 ekor untuk menyesuaikan dosis pelet harian (3% biomassa).',
-                    ],
-                    [
-                        'judul' => 'Probiotik Air & Pencegahan Penyakit',
-                        'jenis' => 'perawatan',
-                        'tanggal' => $mulai->copy()->addDays(55),
-                        'catatan' => 'Aplikasikan probiotik pengurai amonia dasar kolam/tambak.',
-                    ],
-                    [
-                        'judul' => "Perkiraan Panen {$komoditas->nama}",
-                        'jenis' => 'panen',
-                        'tanggal' => $mulai->copy()->addDays($hariPanen),
-                        'catatan' => "Siapkan wadah rantai dingin & es curah untuk estimasi hasil {$estimasiKg} kg.",
-                    ],
-                ],
-            ];
-        }
-
-        // Default: Pertanian (Darat)
-        $hariPanen = match (true) {
-            str_contains($nama, 'padi') || str_contains($nama, 'beras') => 105,
-            str_contains($nama, 'jagung') => 95,
-            str_contains($nama, 'cabai') => 75,
-            str_contains($nama, 'bawang') => 65,
-            str_contains($nama, 'sayur') || str_contains($nama, 'kangkung') || str_contains($nama, 'bayam') => 30,
-            default => 70,
-        };
-
-        $yieldPerM2 = match (true) {
-            str_contains($nama, 'padi') || str_contains($nama, 'beras') => 0.65,
-            str_contains($nama, 'jagung') => 0.85,
-            str_contains($nama, 'cabai') => 1.20,
-            str_contains($nama, 'bawang') => 1.40,
-            default => 1.00,
-        };
-
-        $estimasiKg = round($luasM2 * $yieldPerM2, 1);
-        $pupukNpkKg = round(($luasM2 / 1000) * 25, 1); // ±25 kg NPK per 1.000 m2
-
-        return [
-            'estimasi_panen' => $mulai->copy()->addDays($hariPanen),
-            'estimasi_kg' => $estimasiKg,
-            'jadwals' => [
-                [
-                    'judul' => 'Pemupukan Susulan I (Fase Vegetatif)',
-                    'jenis' => 'pemupukan',
-                    'tanggal' => $mulai->copy()->addDays(14),
-                    'catatan' => "Rekomendasi dosis: ±{$pupukNpkKg} kg NPK (16-16-16) untuk luas {$kapasitas} {$satuan}.",
-                ],
-                [
-                    'judul' => 'Pemupukan Susulan II & Penyiangan Gulma',
-                    'jenis' => 'pemupukan',
-                    'tanggal' => $mulai->copy()->addDays((int) round($hariPanen * 0.42)),
-                    'catatan' => "Tambahkan ±{$pupukNpkKg} kg pupuk susulan + bersihkan gulma di sekitar perakaran.",
-                ],
-                [
-                    'judul' => 'Pengendalian Hama & Pupuk Buah/Umbi',
-                    'jenis' => 'perawatan',
-                    'tanggal' => $mulai->copy()->addDays((int) round($hariPanen * 0.68)),
-                    'catatan' => 'Semprot fungisida/pestisida nabati sore hari & berikan pupuk Kalium (KCl) penguat hasil.',
-                ],
-                [
-                    'judul' => "Perkiraan Panen {$komoditas->nama}",
-                    'jenis' => 'panen',
-                    'tanggal' => $mulai->copy()->addDays($hariPanen),
-                    'catatan' => "Estimasi hasil panen: {$estimasiKg} kg. Siapkan karung/keranjang panen.",
-                ],
+        return match ($sektor) {
+            'ternak' => [
+                ['hari_ke' => 3, 'jenis' => 'perawatan', 'judul' => "Pemberian Vitamin & Elektrolit Awal ({$namaKomoditas})", 'catatan' => 'Larutkan dalam air minum pagi hari untuk adaptasi kandang.'],
+                ['hari_ke' => 14, 'jenis' => 'pengendalian_hama', 'judul' => 'Vaksinasi Tahap 1 & Sanitasi Kandang', 'catatan' => 'Semprot disinfektan area sekitar kandang dan cek sirkulasi udara.'],
+                ['hari_ke' => 28, 'jenis' => 'pemupukan', 'judul' => 'Evaluasi Bobot & Penyesuaian Pakan Grower', 'catatan' => 'Timbang sampel 10% populasi untuk menghitung FCR.'],
+                ['hari_ke' => max(35, $durasiHari - 5), 'jenis' => 'panen', 'judul' => 'Persiapan Panen & Buka Pre-Order Pasar', 'catatan' => 'Siapkan keranjang angkut dan publikasikan stok di Marketplace.'],
             ],
-        ];
+            'laut' => [
+                ['hari_ke' => 5, 'jenis' => 'perawatan', 'judul' => "Pengecekan Kualitas Air / Pakan Awal ({$namaKomoditas})", 'catatan' => 'Pastikan kadar oksigen terlarut dan pH stabil.'],
+                ['hari_ke' => 20, 'jenis' => 'pemupukan', 'judul' => 'Pemberian Probiotik & Pakan Intensif', 'catatan' => 'Berikan pakan terukur 2-3 kali sehari agar tidak mencemari dasar kolam/keramba.'],
+                ['hari_ke' => 40, 'jenis' => 'perawatan', 'judul' => 'Sortasi Ukuran & Cek Kesehatan Ikan', 'catatan' => 'Pisahkan ukuran besar/kecil untuk mencegah kanibalisme.'],
+                ['hari_ke' => max(50, $durasiHari - 5), 'jenis' => 'panen', 'judul' => 'Persiapan Rantai Dingin (Es Curah 1:1) & Panen', 'catatan' => 'Siapkan box berinsulasi agar mutu tetap Grade A.'],
+            ],
+            default => [
+                ['hari_ke' => 7, 'jenis' => 'pemupukan', 'judul' => "Pemupukan Susulan Fase Vegetatif ({$namaKomoditas})", 'catatan' => 'Gunakan pupuk NPK berimbang di sekitar perakaran pagi/sore hari.'],
+                ['hari_ke' => 21, 'jenis' => 'pengendalian_hama', 'judul' => 'Monitoring Hama, Gulma & Penyemprotan Preventif', 'catatan' => 'Periksa bagian bawah daun dari kutu kebul, ulat, atau jamur.'],
+                ['hari_ke' => 45, 'jenis' => 'pemupukan', 'judul' => 'Pemupukan Fase Generatif (Pembungaan/Pembuahan)', 'catatan' => 'Tingkatkan unsur Kalium (K) & Kalsium untuk mencegah kerontokan bunga/buah.'],
+                ['hari_ke' => max(60, $durasiHari - 7), 'jenis' => 'panen', 'judul' => 'Persiapan Sortasi Grade A/B & Pre-Order Panen', 'catatan' => 'Siapkan wadah panen bersih dan buka listing Pre-Order di Marketplace.'],
+            ],
+        };
     }
 }

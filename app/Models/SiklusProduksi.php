@@ -31,6 +31,16 @@ class SiklusProduksi extends Model
 
     public function keuangans()
     {
-        return $this->hasMany(Keuangan::class);
+        return $this->hasMany(Keuangan::class, 'siklus_produksi_id');
+    }
+
+    public function produksi()
+    {
+        return $this->hasOne(Produksi::class, 'siklus_produksi_id');
+    }
+
+    public function listings()
+    {
+        return $this->hasMany(ListingPanen::class, 'siklus_produksi_id');
     }
 }

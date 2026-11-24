@@ -13,6 +13,77 @@ use App\Models\PanduanTanam;
 
 class PanganController extends Controller
 {
+
+    public function updateProduksi(Request $request, $id)
+    {
+        $produksi = Produksi::where('user_id', auth()->id())->findOrFail($id);
+
+        $request->validate([
+            'komoditas_id' => 'required|exists:komoditas,id',
+            'jumlah' => 'required|numeric|min:0.1',
+            'satuan' => 'required|string|max:30',
+            'tanggal_panen' => 'required|date',
+            'catatan' => 'nullable|string|max:255',
+        ]);
+
+        $produksi->update([
+            'komoditas_id' => $request->komoditas_id,
+            'jumlah' => $request->jumlah,
+            'satuan' => $request->satuan,
+            'tanggal_panen' => $request->tanggal_panen,
+            'catatan' => $request->catatan,
+        ]);
+
+        return redirect()->route('produksi', ['sektor' => $produksi->sektor])
+            ->with('success', 'Catatan produksi berhasil diperbarui!');
+    }
+
+    public function destroyProduksi($id)
+    {
+        $produksi = Produksi::where('user_id', auth()->id())->findOrFail($id);
+        $sektor = $produksi->sektor;
+        $produksi->delete();
+
+        return redirect()->route('produksi', ['sektor' => $sektor])
+            ->with('success', 'Catatan produksi berhasil dihapus!');
+    }
+
+    public function updateAlert(Request $request, $id)
+    {
+        $alert = PantauanAlert::where('user_id', auth()->id())->findOrFail($id);
+
+        $request->validate([
+            'kondisi' => 'required|in:naik_di_atas,turun_di_bawah',
+            'target_harga' => 'required|numeric|min:100',
+        ]);
+
+        $alert->update([
+            'kondisi' => $request->kondisi,
+            'target_harga' => $request->target_harga,
+        ]);
+
+        return redirect()->route('pantauan')->with('success', 'Aturan alert harga berhasil diperbarui!');
+    }
+
+    public function toggleAlert($id)
+    {
+        $alert = PantauanAlert::where('user_id', auth()->id())->findOrFail($id);
+        $alert->update([
+            'is_aktif' => !$alert->is_aktif,
+        ]);
+
+        $statusTeks = $alert->is_aktif ? 'diaktifkan kembali' : 'dijeda sementara';
+        return redirect()->route('pantauan')->with('success', "Notifikasi alert harga berhasil {$statusTeks}.");
+    }
+
+    public function destroyAlert($id)
+    {
+        $alert = PantauanAlert::where('user_id', auth()->id())->findOrFail($id);
+        $alert->delete();
+
+        return redirect()->route('pantauan')->with('success', 'Aturan alert harga berhasil dihapus.');
+    }
+
     private function getKonfigurasiSektor($user)
     {
         $peran = $user?->peran_sektor ?? 'konsumen';
@@ -171,21 +242,77 @@ class PanganController extends Controller
         $semuaKomoditas = Komoditas::all();
 
         $listings = $user
-            ? ListingPanen::with('komoditas')->where('user_id', $user->id)->latest()->get()
+            ? ListingPanen::with(['komoditas', 'siklus'])->where('user_id', $user->id)->latest()->get()
             : collect();
 
+        // Ambil siklus berjalan (untuk Pre-Order) & siklus selesai panen (untuk Ready Stock)
         $siklusAktif = $user
-            ? \App\Models\SiklusProduksi::with('komoditas')->where('user_id', $user->id)->where('status', 'berjalan')->get()
+            ? \App\Models\SiklusProduksi::with(['komoditas', 'produksi'])
+                ->where('user_id', $user->id)
+                ->whereIn('status', ['berjalan', 'selesai'])
+                ->latest()
+                ->get()
             : collect();
 
         $listingAktif = $listings->where('status', 'aktif');
         $totalPendapatan = $listingAktif->sum(fn($l) => $l->stok_kg * $l->harga_jual_per_kg);
 
-        $pasarListings = ListingPanen::with(['komoditas', 'user'])
+        $pasarListings = ListingPanen::with(['komoditas', 'user', 'siklus'])
             ->where('status', 'aktif')
             ->latest()
-            ->take(20)
+            ->take(30)
             ->get();
+
+        $titikPasar = [
+            [
+                'nama' => 'Pasar Raya Padang (Blok Sayur & Sembako)',
+                'jenis' => 'Pasar Induk',
+                'jam_operasional' => '05.00 - 18.00 WIB',
+                'komoditas_utama' => 'Beras, Cabai, Bawang, Sayuran',
+                'lat' => -0.9492,
+                'lng' => 100.3543,
+            ],
+            [
+                'nama' => 'TPI Muaro Padang (Tempat Pelelangan Ikan)',
+                'jenis' => 'Pasar Ikan & Hasil Laut',
+                'jam_operasional' => '06.00 - 17.00 WIB',
+                'komoditas_utama' => 'Ikan Tongkol, Tuna, Udang, Cumi',
+                'lat' => -0.9619,
+                'lng' => 100.3578,
+            ],
+            [
+                'nama' => 'Pasar Alai Padang',
+                'jenis' => 'Pasar Tradisional',
+                'jam_operasional' => '05.30 - 16.00 WIB',
+                'komoditas_utama' => 'Ayam Potong, Telur, Sayur Segar',
+                'lat' => -0.9235,
+                'lng' => 100.3638,
+            ],
+            [
+                'nama' => 'Pasar Lubuk Buaya',
+                'jenis' => 'Pasar Regional',
+                'jam_operasional' => '05.00 - 17.00 WIB',
+                'komoditas_utama' => 'Beras Solok, Cabai Merah, Daging Sapi',
+                'lat' => -0.8583,
+                'lng' => 100.3489,
+            ],
+            [
+                'nama' => 'Pasar Painan (Sentra Pesisir Selatan)',
+                'jenis' => 'Pasar Kabupaten',
+                'jam_operasional' => '05.30 - 17.00 WIB',
+                'komoditas_utama' => 'Ikan Laut Segar, Pinang, Cabai, Beras',
+                'lat' => -1.3514,
+                'lng' => 100.5762,
+            ],
+            [
+                'nama' => 'Pasar Balai Selasa (Ranah Pesisir)',
+                'jenis' => 'Pasar Nagari / Sentra Tani',
+                'jam_operasional' => '06.00 - 15.00 WIB',
+                'komoditas_utama' => 'Padi, Jagung, Cabai, Hasil Kebun',
+                'lat' => -1.6632,
+                'lng' => 100.7081,
+            ],
+        ];
 
         return view('pages.jual', compact(
             'user',
@@ -196,7 +323,8 @@ class PanganController extends Controller
             'siklusAktif',
             'listingAktif',
             'totalPendapatan',
-            'pasarListings'
+            'pasarListings',
+            'titikPasar'
         ));
     }
 
@@ -214,9 +342,21 @@ class PanganController extends Controller
             'siklus_produksi_id' => 'nullable|exists:siklus_produksis,id',
         ]);
 
+        $siklusId = $request->siklus_produksi_id ?: null;
+        $produksiId = null;
+
+        // Jika ditautkan ke siklus, otomatis hubungkan juga ke ID Catatan Produksi terkait (jika ada)
+        if ($siklusId) {
+            $produksiTerkait = Produksi::where('user_id', auth()->id())
+                ->where('siklus_produksi_id', $siklusId)
+                ->first();
+            $produksiId = $produksiTerkait?->id;
+        }
+
         ListingPanen::create([
             'user_id' => auth()->id(),
-            'siklus_produksi_id' => $request->siklus_produksi_id ?: null,
+            'siklus_produksi_id' => $siklusId,
+            'produksi_id' => $produksiId,
             'komoditas_id' => $request->komoditas_id,
             'stok_kg' => $request->stok_kg,
             'harga_jual_per_kg' => $request->harga_jual_per_kg,
@@ -228,27 +368,43 @@ class PanganController extends Controller
             'status' => 'aktif',
         ]);
 
+        app(\App\Services\HargaSyncService::class)->sinkronkanSemua();
         return redirect()->route('jual')->with('success', 'Produk & titik lokasi penjualan berhasil dipublikasikan ke Marketplace!');
     }
 
     public function updateJualHasil(Request $request, $id)
     {
-        $listing = ListingPanen::where('user_id', auth()->id())->findOrFail($id);
+        $listing = ListingPanen::with('komoditas')->where('user_id', auth()->id())->findOrFail($id);
 
-        if ($request->input('aksi') === 'terjual') {
-            $listing->update(['status' => 'terjual']);
-
-            $konfig = $this->getKonfigurasiSektor(auth()->user());
-            Keuangan::create([
-                'user_id' => auth()->id(),
-                'jenis' => 'pemasukan',
-                'kategori' => $konfig['kategori_masuk'][0] ?? 'Penjualan Produk',
-                'nominal' => $listing->stok_kg * $listing->harga_jual_per_kg,
-                'musim_tanam' => $konfig['siklus'],
-                'tanggal' => now()->toDateString(),
+        if ($request->input('aksi') === 'terjual' || $request->input('status') === 'terjual') {
+            $listing->update([
+                'stok_kg' => $request->filled('stok_kg') ? $request->stok_kg : $listing->stok_kg,
+                'harga_jual_per_kg' => $request->filled('harga_jual_per_kg') ? $request->harga_jual_per_kg : $listing->harga_jual_per_kg,
+                'status' => 'terjual',
             ]);
 
-            return redirect()->route('jual')->with('success', 'Listing ditandai terjual & pemasukan otomatis dicatat ke Keuangan!');
+            $konfig = $this->getKonfigurasiSektor(auth()->user());
+            $totalJual = $listing->stok_kg * $listing->harga_jual_per_kg;
+            $kodeReferensi = "LISTING-{$listing->id}";
+
+            // Anti-duplikat: gunakan updateOrCreate berdasarkan referensi_kode unik
+            Keuangan::updateOrCreate(
+                ['referensi_kode' => $kodeReferensi],
+                [
+                    'user_id' => auth()->id(),
+                    'siklus_produksi_id' => $listing->siklus_produksi_id,
+                    'sumber_transaksi' => 'pasar_panen',
+                    'jenis' => 'pemasukan',
+                    'kategori' => $konfig['kategori_masuk'][0] ?? 'Penjualan Produk',
+                    'jumlah' => $totalJual,
+                    'nominal' => $totalJual,
+                    'keterangan' => 'Penjualan Pasar Panen: ' . ($listing->komoditas->nama ?? 'Komoditas') . " ({$listing->stok_kg} kg @ Rp " . number_format($listing->harga_jual_per_kg, 0, ',', '.') . ")",
+                    'tanggal' => now()->toDateString(),
+                ]
+            );
+
+            app(\App\Services\HargaSyncService::class)->sinkronkanSemua();
+            return redirect()->route('jual')->with('success', 'Listing ditandai terjual & pemasukan tersinkron otomatis ke Keuangan & Laporan Siklus tanpa duplikasi!');
         }
 
         $request->validate([
@@ -266,96 +422,205 @@ class PanganController extends Controller
         return redirect()->route('jual')->with('success', 'Data listing penjualan berhasil diperbarui!');
     }
 
-    public function destroyJualHasil($id)
-    {
-        $listing = ListingPanen::where('user_id', auth()->id())->findOrFail($id);
-        $listing->delete();
-
-        return redirect()->route('jual')->with('success', 'Listing penjualan berhasil dihapus!');
-    }
-
-    public function keuangan()
-    {
-        $user = auth()->user();
-        $konfig = $this->getKonfigurasiSektor($user);
-
-        $pemasukan = Keuangan::where('user_id', $user->id)->where('jenis', 'pemasukan')->sum('nominal');
-        $pengeluaran = Keuangan::where('user_id', $user->id)->where('jenis', 'pengeluaran')->sum('nominal');
-        $labaBersih = $pemasukan - $pengeluaran;
-        $transaksi = Keuangan::where('user_id', $user->id)->latest()->take(15)->get();
-
-        return view('pages.keuangan', compact('user', 'konfig', 'pemasukan', 'pengeluaran', 'labaBersih', 'transaksi'));
-    }
-
     public function storeKeuangan(Request $request)
     {
         $request->validate([
+            'siklus_produksi_id' => 'nullable|exists:siklus_produksis,id',
             'jenis' => 'required|in:pemasukan,pengeluaran',
-            'kategori' => 'required|string',
-            'nominal' => 'required|numeric|min:100',
+            'kategori' => 'required|string|max:100',
+            'jumlah' => 'required|numeric|min:100',
+            'keterangan' => 'nullable|string|max:255',
+            'tanggal' => 'required|date',
         ]);
 
+        Keuangan::create([
+            'user_id' => auth()->id(),
+            'siklus_produksi_id' => $request->siklus_produksi_id ?: null,
+            'sumber_transaksi' => 'manual',
+            'referensi_kode' => null,
+            'jenis' => $request->jenis,
+            'kategori' => $request->kategori,
+            'jumlah' => $request->jumlah,
+            'nominal' => $request->jumlah,
+            'keterangan' => $request->keterangan,
+            'tanggal' => $request->tanggal,
+        ]);
+
+        return redirect()->route('keuangan')->with('success', 'Catatan transaksi keuangan manual berhasil disimpan!');
+    }
+
+    public function destroyJualHasil($id)
+    {
+        $listing = ListingPanen::where('user_id', auth()->id())->findOrFail($id);
+        Keuangan::where('user_id', auth()->id())
+            ->where('referensi_kode', "LISTING-{$listing->id}")
+            ->delete();
+        $listing->delete();
+
+        app(\App\Services\HargaSyncService::class)->sinkronkanSemua();
+        return redirect()->route('jual')->with('success', 'Listing penjualan & catatan pemasukan terkait berhasil dihapus!');
+    }
+
+    public function keuangan(Request $request)
+    {
         $user = auth()->user();
         $konfig = $this->getKonfigurasiSektor($user);
 
-        Keuangan::create([
-            'user_id' => $user->id,
-            'jenis' => $request->jenis,
-            'kategori' => $request->kategori,
-            'nominal' => $request->nominal,
-            'musim_tanam' => $konfig['siklus'],
-            'tanggal' => now()->toDateString(),
-        ]);
+        $filterSiklus = $request->get('siklus_id');
+        $filterJenis = $request->get('jenis');
 
-        $label = $request->jenis === 'pemasukan' ? 'Pemasukan' : 'Pengeluaran';
-        return redirect()->route('keuangan')->with('success', "{$label} berhasil dicatat ke pembukuan Anda!");
+        $query = Keuangan::with('siklus')
+            ->where('user_id', $user->id);
+
+        if ($filterSiklus === 'umum') {
+            $query->whereNull('siklus_produksi_id');
+        } elseif (!empty($filterSiklus)) {
+            $query->where('siklus_produksi_id', $filterSiklus);
+        }
+
+        if (!empty($filterJenis) && in_array($filterJenis, ['pemasukan', 'pengeluaran'])) {
+            $query->where('jenis', $filterJenis);
+        }
+
+        $transaksis = $query->latest('tanggal')
+            ->latest('id')
+            ->get();
+
+        $siklusList = \App\Models\SiklusProduksi::with('komoditas')
+            ->where('user_id', $user->id)
+            ->latest()
+            ->get();
+
+        $totalMasuk = $transaksis->where('jenis', 'pemasukan')->sum('jumlah');
+        $totalKeluar = $transaksis->where('jenis', 'pengeluaran')->sum('jumlah');
+        $saldoBersih = $totalMasuk - $totalKeluar;
+
+        return view('pages.keuangan', compact(
+            'user',
+            'konfig',
+            'transaksis',
+            'siklusList',
+            'totalMasuk',
+            'totalKeluar',
+            'saldoBersih',
+            'filterSiklus',
+            'filterJenis'
+        ));
     }
 
     public function updateKeuangan(Request $request, $id)
     {
+        $transaksi = Keuangan::where('user_id', auth()->id())->findOrFail($id);
+
+        // Lindungi transaksi otomatis dari Pasar Panen agar nominal tetap sinkron dengan stok
+        if ($transaksi->sumber_transaksi === 'pasar_panen') {
+            return redirect()->route('keuangan')
+                ->with('error', 'Transaksi otomatis dari Pasar Panen tidak dapat diubah manual. Ubah melalui menu Pasar Panen.');
+        }
+
         $request->validate([
+            'siklus_produksi_id' => 'nullable|exists:siklus_produksis,id',
             'jenis' => 'required|in:pemasukan,pengeluaran',
             'kategori' => 'required|string|max:100',
-            'nominal' => 'required|numeric|min:100',
+            'jumlah' => 'required|numeric|min:100',
+            'keterangan' => 'nullable|string|max:255',
             'tanggal' => 'required|date',
         ]);
 
-        $transaksi = Keuangan::where('user_id', auth()->id())->findOrFail($id);
         $transaksi->update([
+            'siklus_produksi_id' => $request->siklus_produksi_id ?: null,
             'jenis' => $request->jenis,
             'kategori' => $request->kategori,
-            'nominal' => $request->nominal,
+            'jumlah' => $request->jumlah,
+            'nominal' => $request->jumlah,
+            'keterangan' => $request->keterangan,
             'tanggal' => $request->tanggal,
         ]);
 
-        return redirect()->route('keuangan')->with('success', 'Transaksi keuangan berhasil diperbarui!');
+        return redirect()->route('keuangan')->with('success', 'Catatan transaksi keuangan berhasil diperbarui!');
     }
 
     public function destroyKeuangan($id)
     {
         $transaksi = Keuangan::where('user_id', auth()->id())->findOrFail($id);
+
+        // Cegah penghapusan langsung transaksi otomatis Pasar Panen agar laporan omzet tidak timpang
+        if ($transaksi->sumber_transaksi === 'pasar_panen') {
+            return redirect()->route('keuangan')
+                ->with('error', 'Transaksi otomatis dari Pasar Panen tidak bisa dihapus langsung di sini. Hapus atau ubah status listing-nya di menu Pasar Panen.');
+        }
+
         $transaksi->delete();
 
-        return redirect()->route('keuangan')->with('success', 'Transaksi keuangan berhasil dihapus!');
+        return redirect()->route('keuangan')->with('success', 'Transaksi keuangan manual berhasil dihapus!');
     }
 
     public function laporan()
     {
-        $userId = auth()->id();
-        $konfig = $this->getKonfigurasiSektor(auth()->user());
+        $user = auth()->user();
+        $konfig = $this->getKonfigurasiSektor($user);
 
-        $pemasukan = Keuangan::where('user_id', $userId)->where('jenis', 'pemasukan')->sum('nominal');
-        $pengeluaran = Keuangan::where('user_id', $userId)->where('jenis', 'pengeluaran')->sum('nominal');
-        $labaBersih = $pemasukan - $pengeluaran;
+        $siklusLaporan = \App\Models\SiklusProduksi::with(['komoditas', 'keuangans'])
+            ->where('user_id', $user->id)
+            ->orderBy('tanggal_mulai', 'asc')
+            ->get()
+            ->map(function ($siklus) {
+                $modal = $siklus->keuangans->where('jenis', 'pengeluaran')->sum('jumlah');
+                $omzet = $siklus->keuangans->where('jenis', 'pemasukan')->sum('jumlah');
+                $labaBersih = $omzet - $modal;
+                $roi = $modal > 0 ? round(($labaBersih / $modal) * 100, 1) : ($omzet > 0 ? 100 : 0);
 
-        $rincianBiaya = Keuangan::where('user_id', $userId)
+                $hasilKg = $siklus->hasil_aktual_kg ?? $siklus->estimasi_hasil_kg;
+                $hppPerKg = $hasilKg > 0 ? round($modal / $hasilKg, 0) : 0;
+
+                $siklus->total_modal = $modal;
+                $siklus->total_omzet = $omzet;
+                $siklus->laba_bersih = $labaBersih;
+                $siklus->roi_persen = $roi;
+                $siklus->hpp_per_kg = $hppPerKg;
+
+                return $siklus;
+            });
+
+        $totalModalSemua = $siklusLaporan->sum('total_modal');
+        $totalOmzetSemua = $siklusLaporan->sum('total_omzet');
+        $totalLabaSemua = $totalOmzetSemua - $totalModalSemua;
+
+        // Data Grafik 1 & 3: Perbandingan Finansial & Tonase Antar Siklus
+        $chartLabelsSiklus = $siklusLaporan->pluck('nama_siklus')->values();
+        $chartModalSiklus = $siklusLaporan->pluck('total_modal')->map(fn($v) => (float) $v)->values();
+        $chartOmzetSiklus = $siklusLaporan->pluck('total_omzet')->map(fn($v) => (float) $v)->values();
+        $chartLabaSiklus = $siklusLaporan->pluck('laba_bersih')->map(fn($v) => (float) $v)->values();
+        $chartEstimasiKg = $siklusLaporan->pluck('estimasi_hasil_kg')->map(fn($v) => (float) $v)->values();
+        $chartAktualKg = $siklusLaporan->map(fn($s) => (float) ($s->hasil_aktual_kg ?? 0))->values();
+
+        // Data Grafik 2: Komposisi Pengeluaran Modal per Kategori
+        $pengeluaranPerKategori = Keuangan::where('user_id', $user->id)
             ->where('jenis', 'pengeluaran')
-            ->selectRaw('kategori, SUM(nominal) as total')
+            ->selectRaw('kategori, SUM(jumlah) as total')
             ->groupBy('kategori')
             ->orderByDesc('total')
             ->get();
 
-        return view('pages.laporan', compact('konfig', 'pemasukan', 'labaBersih', 'pengeluaran', 'rincianBiaya'));
+        $chartKategoriLabels = $pengeluaranPerKategori->pluck('kategori')->values();
+        $chartKategoriTotals = $pengeluaranPerKategori->pluck('total')->map(fn($v) => (float) $v)->values();
+
+        return view('pages.laporan', compact(
+            'user',
+            'konfig',
+            'siklusLaporan',
+            'totalModalSemua',
+            'totalOmzetSemua',
+            'totalLabaSemua',
+            'chartLabelsSiklus',
+            'chartModalSiklus',
+            'chartOmzetSiklus',
+            'chartLabaSiklus',
+            'chartEstimasiKg',
+            'chartAktualKg',
+            'chartKategoriLabels',
+            'chartKategoriTotals'
+        ));
     }
 
     public function harga(Request $request)
@@ -366,7 +631,7 @@ class PanganController extends Controller
             $query->where('kategori_harga', $kategori);
         }
         $komoditas = $query->get();
-
+        app(\App\Services\HargaSyncService::class)->sinkronkanSemua();
         return view('pages.harga', compact('komoditas', 'kategori'));
     }
 
@@ -598,74 +863,75 @@ class PanganController extends Controller
             'pertanyaan' => 'required|string|max:1000',
         ]);
 
-        $user = auth()->user();
-        $peran = $user->peran_sektor ?? 'konsumen';
-        $pertanyaan = $request->pertanyaan;
-
-        $sektorFilter = match ($peran) {
-            'petani' => 'darat',
-            'peternak' => 'ternak',
-            'nelayan' => 'laut',
-            default => null,
-        };
-
-        $queryStok = Produksi::with('komoditas')
-            ->where('user_id', $user->id)
-            ->latest()
-            ->take(5);
-
-        if ($sektorFilter) {
-            $queryStok->where('sektor', $sektorFilter);
-        }
-
-        $ringkasanStok = $queryStok->get()
-            ->map(fn($p) => "{$p->komoditas->nama}: {$p->jumlah} {$p->satuan}")
-            ->implode(', ');
-
-        $peranPakarAI = match ($peran) {
-            'petani' => 'Pakar Agronomi, Budidaya Tanaman, dan Pascapanen Pertanian',
-            'peternak' => 'Pakar Peternakan, Nutrisi Pakan, Kesehatan Hewan, dan Agribisnis Ternak',
-            'nelayan' => 'Pakar Perikanan Tangkap, Budidaya Perairan, dan Teknologi Rantai Dingin Hasil Laut',
-            'pelaku_pangan' => 'Pakar Teknologi Pangan, Manajemen Gudang, Pengolahan, dan Rantai Pasok',
-            default => 'Pakar Gizi, Manajemen Belanja Pangan Keluarga, dan Penyimpanan Bahan Makanan Anti-Food Waste',
-        };
-
-        $apiKey = env('GEMINI_API_KEY');
+        $apiKey = trim((string) env('GEMINI_API_KEY'));
 
         if (empty($apiKey)) {
             return response()->json([
-                'jawaban' => "⚠️ API Key Gemini belum dipasang di file .env.\n\nSaran cepat untuk {$user->name} ({$peran}): Untuk mengatasi \"{$pertanyaan}\", pastikan pencatatan stok rutin dilakukan, pisahkan produk berdasarkan mutu kesegaran agar tidak saling membusukkan, dan manfaatkan fitur Pantauan Alert untuk menentukan waktu jual/beli terbaik."
-            ]);
+                'jawaban' => 'API Key Gemini belum diatur di file .env (GEMINI_API_KEY).'
+            ], 500);
         }
 
-        $promptSistem = "Anda adalah {$peranPakarAI} di aplikasi PanganKu Nasional. "
-            . "Pengguna saat ini bernama {$user->name}, jenis akun: '{$peran}', fokus komoditas: '" . ($user->komoditas_utama ?: 'Umum') . "', wilayah: '" . ($user->lokasi ?: 'Indonesia') . "'. "
-            . "Data stok pribadi pengguna tercatat: [" . ($ringkasanStok ?: 'Belum ada data stok') . "]. "
-            . "Berikan jawaban yang 100% relevan dengan bidang '{$peran}', praktis, terstruktur dalam poin-poin singkat berbahasa Indonesia, serta sertakan langkah antisipasi risiko ke depan agar bahan pangan tidak tersia-siakan (mencegah food waste & kerugian harga).\n\n"
-            . "Pertanyaan Pengguna: {$pertanyaan}";
+        $user = auth()->user();
+        $peran = $user?->peran_sektor ?? 'pelaku pangan';
+        $komoditas = $user?->komoditas_utama ?? 'pangan umum';
+        $lokasi = $user?->lokasi ?? 'Indonesia';
+
+        $promptSistem = "Anda adalah Pakar Agronomi, Peternakan, Perikanan, dan Agribisnis dari platform PanganKu Nasional. "
+            . "Pengguna saat ini berperan sebagai {$peran} dengan fokus komoditas {$komoditas} di wilayah {$lokasi}. "
+            . "Berikan jawaban praktis, terstruktur, jelas, dan langsung dapat diterapkan di lapangan dalam Bahasa Indonesia.\n\n"
+            . "Pertanyaan pengguna: " . $request->pertanyaan;
+
+        $models = [
+            'gemini-2.5-flash',
+            'gemini-2.0-flash',
+            'gemini-flash-latest',
+        ];
+
+        $lastStatus = 500;
+        $lastError = '';
 
         try {
-            $response = Http::timeout(25)->post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}",
-                [
-                    'contents' => [
+            foreach ($models as $model) {
+                $response = Http::withOptions([
+                        'force_ip_resolve' => 'v4',
+                    ])
+                    ->connectTimeout(15)
+                    ->timeout(45)
+                    ->post(
+                        "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
                         [
-                            'parts' => [
-                                ['text' => $promptSistem]
+                            'contents' => [
+                                [
+                                    'parts' => [
+                                        ['text' => $promptSistem]
+                                    ]
+                                ]
                             ]
                         ]
-                    ]
-                ]
-            );
+                    );
 
-            if ($response->successful()) {
-                $data = $response->json();
-                $jawaban = $data['candidates'][0]['content']['parts'][0]['text'] ?? 'Maaf, pakar AI belum dapat merumuskan jawaban saat ini.';
-                return response()->json(['jawaban' => $jawaban]);
+                if ($response->successful()) {
+                    $data = $response->json();
+                    $jawaban = $data['candidates'][0]['content']['parts'][0]['text']
+                        ?? 'Maaf, Pakar AI belum dapat merumuskan jawaban saat ini.';
+
+                    return response()->json([
+                        'jawaban' => $jawaban,
+                        'model' => $model,
+                    ]);
+                }
+
+                $lastStatus = $response->status();
+                $lastError = $response->json('error.message') ?? $response->body();
+
+                // Lanjut ke model cadangan jika 404 (tidak ditemukan), 503 (server sibuk), atau 429 (limit sementara)
+                if (!in_array($lastStatus, [404, 503, 429])) {
+                    break;
+                }
             }
 
             return response()->json([
-                'jawaban' => 'Gagal terhubung ke layanan Pakar AI (Kode: ' . $response->status() . '). Periksa kembali GEMINI_API_KEY di file .env.'
+                'jawaban' => "Gagal terhubung ke layanan Pakar AI (Kode: {$lastStatus}). Detail: {$lastError}"
             ], 500);
 
         } catch (\Exception $e) {

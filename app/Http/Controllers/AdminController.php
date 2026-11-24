@@ -27,6 +27,11 @@ class AdminController extends Controller
         $totalListingAktif = ListingPanen::where('status', 'aktif')->count();
         $totalPerputaranUang = Keuangan::where('jenis', 'pemasukan')->sum('nominal');
 
+        $pengajuanPeran = User::whereIn('status_verifikasi_peran', ['pending', 'approved', 'rejected'])
+            ->orderByRaw("FIELD(status_verifikasi_peran, 'pending', 'approved', 'rejected')")
+            ->latest('updated_at')
+            ->get();
+
         // Deteksi Nasional: Komoditas dengan stok berlebih & harga turun
         $peringatanNasional = [];
         foreach (Komoditas::all() as $item) {
@@ -52,6 +57,7 @@ class AdminController extends Controller
             'totalProduksiKg',
             'totalListingAktif',
             'totalPerputaranUang',
+            'pengajuanPeran',
             'peringatanNasional',
             'produksiTerbaru'
         ));
@@ -83,6 +89,8 @@ class AdminController extends Controller
             'satuan' => 'kg',
             'harga_pasar' => $request->harga_pasar,
             'harga_petani' => $request->harga_petani,
+            'harga_sekarang' => $request->harga_pasar,
+            'harga_acuan_pemerintah' => $request->harga_pasar,
             'persentase_perubahan' => $request->persentase_perubahan,
             'is_favorit' => $request->has('is_favorit'),
             'ikon' => $request->ikon ?: '🌾',
@@ -103,6 +111,8 @@ class AdminController extends Controller
         $item->update([
             'harga_pasar' => $request->harga_pasar,
             'harga_petani' => $request->harga_petani,
+            'harga_sekarang' => $request->harga_pasar,
+            'harga_acuan_pemerintah' => $request->harga_pasar,
             'persentase_perubahan' => $request->persentase_perubahan,
             'is_favorit' => $request->has('is_favorit'),
         ]);

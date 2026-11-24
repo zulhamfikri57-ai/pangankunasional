@@ -1,45 +1,62 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Masuk — PanganKu Nasional</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #F7F5EE; }</style>
-</head>
-<body class="min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-white rounded-3xl p-8 shadow-lg border border-stone-100">
-        <div class="text-center mb-8">
-            <div class="w-14 h-14 mx-auto rounded-2xl bg-emerald-700 text-white flex items-center justify-center text-3xl mb-3">🌱</div>
-            <h1 class="text-2xl font-extrabold text-emerald-900">PanganKu Nasional</h1>
-            <p class="text-sm text-stone-500 mt-1">Masuk ke dasbor usaha tani, ternak & perikanan</p>
-        </div>
+@extends('layouts.app')
+@section('content')
+    <div class="max-w-md mx-auto bg-white p-6 sm:p-8 rounded-3xl border border-stone-200/80 shadow-xs my-6">
+        <h2 class="font-extrabold text-xl text-stone-800">🔑 Masuk ke PanganKu Nasional</h2>
+        <p class="text-xs text-stone-500 mt-1">Gunakan Email atau Nomor HP yang sudah Anda daftarkan.</p>
 
         @if($errors->any())
-            <div class="mb-4 p-3.5 rounded-2xl bg-rose-50 text-rose-700 text-xs font-bold">
+            <div class="mt-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-semibold">
                 {{ $errors->first() }}
             </div>
         @endif
 
-        <form action="{{ route('login') }}" method="POST" class="space-y-4">
+        <form action="{{ route('login.post') }}" method="POST" class="space-y-4 mt-5">
             @csrf
             <div>
-                <label class="block text-xs font-bold text-stone-700 mb-1">Email</label>
-                <input type="email" name="email" value="{{ old('email', 'sugianto@panganku.id') }}" required class="w-full px-4 py-3 rounded-xl border border-stone-300 focus:outline-none focus:border-emerald-600">
+                <label class="block text-xs font-bold text-stone-600 mb-1">Email atau Nomor HP</label>
+                <input type="text" name="kontak" value="{{ old('kontak') }}" placeholder="nama@gmail.com atau 081234567890"
+                    required class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
             </div>
+
             <div>
-                <label class="block text-xs font-bold text-stone-700 mb-1">Kata Sandi</label>
-                <input type="password" name="password" value="password123" required class="w-full px-4 py-3 rounded-xl border border-stone-300 focus:outline-none focus:border-emerald-600">
+                <label class="block text-xs font-bold text-stone-600 mb-1">Kata Sandi</label>
+                <div class="relative">
+                    <input type="password" id="loginPassword" name="password" required
+                        class="w-full px-4 py-3 pr-12 rounded-xl border border-stone-300 text-sm">
+                    <button type="button" onclick="togglePassword('loginPassword', this)"
+                        class="absolute inset-y-0 right-0 px-3.5 text-stone-500 hover:text-stone-800 text-xs font-bold cursor-pointer">
+                        👁️ Lihat
+                    </button>
+                </div>
             </div>
-            <button type="submit" class="w-full py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm transition">
-                Masuk ke Dasbor
+
+            <button type="submit"
+                class="w-full py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm transition cursor-pointer">
+                Masuk →
             </button>
         </form>
+        <div class="flex items-center justify-between mb-1">
+            <a href="{{ route('password.request') }}" class="text-xs font-bold text-emerald-700 hover:underline">
+                Lupa kata sandi?
+            </a>
+        </div>
 
-        <p class="text-center text-xs text-stone-500 mt-6">
-            Belum punya akun? <a href="{{ route('register') }}" class="font-bold text-emerald-700 hover:underline">Daftar Akun Baru</a>
+        <p class="text-xs text-center text-stone-500 mt-5">
+            Belum punya akun? <a href="{{ route('register') }}" class="font-bold text-emerald-700 hover:underline">Daftar
+                dengan Email / No. HP</a>
         </p>
     </div>
-</body>
-</html>
+
+    <script>
+        function togglePassword(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '🙈 Tutup';
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁️ Lihat';
+            }
+        }
+    </script>
+@endsection

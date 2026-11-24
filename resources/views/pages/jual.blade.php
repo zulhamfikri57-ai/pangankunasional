@@ -1,312 +1,465 @@
 @extends('layouts.app')
 @section('content')
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        .custom-pin {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            border: 2.5px solid #ffffff;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+            font-size: 16px;
+        }
+    </style>
 
-<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
-    <div>
-        <h2 class="fluid-title font-extrabold text-stone-800">🏪 Marketplace Pangan & Peta Lokasi Jual</h2>
-        <p class="text-xs text-stone-500 mt-0.5">Temukan titik penjualan langsung produsen atau buka Pre-Order panen Anda</p>
-    </div>
-    <span class="px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold w-fit">
-        {{ $konfig['ikon'] }} {{ $konfig['label_peran'] }}
-    </span>
-</div>
-
-<!-- PETA SEBARAN TITIK PENJUALAN BAHAN PANGAN (PUBLIK) -->
-<div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-100 shadow-xs mb-6">
-    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
         <div>
-            <h3 class="font-extrabold text-base text-stone-800">🗺️ Peta Sebaran Lokasi Penjualan Bahan Pangan</h3>
-            <p class="text-xs text-stone-500">Klik pin pada peta untuk melihat detail komoditas, harga, stok, dan status Pre-Order</p>
+            <h2 class="fluid-title font-extrabold text-stone-800">🏪 Pasar & Jual Beli Pangan</h2>
+            <p class="text-xs sm:text-sm text-stone-500 mt-0.5">Peta sebaran pasar tradisional, TPI, dan titik jual langsung
+                dari petani, peternak, serta nelayan</p>
         </div>
-        <span class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-bold">
-            {{ $pasarListings->count() }} Titik Penjualan Aktif
+        <span class="px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold w-fit">
+            {{ $konfig['ikon'] }} {{ $konfig['label_peran'] }}
         </span>
     </div>
-    <div id="mapMarketplace" class="w-full h-72 rounded-2xl border border-stone-200 z-10"></div>
-</div>
 
-@guest
-<div class="mb-6 p-4 sm:p-5 rounded-3xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-    <div>
-        <p class="font-extrabold text-sm text-emerald-950">Ingin memasarkan bahan pangan atau membuka Pre-Order?</p>
-        <p class="text-xs text-emerald-800 mt-0.5">Masuk ke akun Anda untuk menandai titik lokasi penjualan di peta dan mulai berjualan.</p>
-    </div>
-    <a href="{{ route('login') }}" class="px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs text-center whitespace-nowrap">
-        🔑 Masuk untuk Berjualan
-    </a>
-</div>
-@endguest
-
-@if($user && $user->peran_sektor !== 'konsumen')
-<!-- FORM BUAT LISTING PENJUALAN / PRE-ORDER + PIN LOKASI JUAL -->
-<div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-100 shadow-xs mb-6">
-    <h3 class="font-extrabold text-base text-stone-800 mb-4">🛒 Publikasikan Penjualan / Pre-Order Baru</h3>
-    <form action="{{ route('jual.store') }}" method="POST" class="space-y-4">
-        @csrf
-
-        <!-- Pilih Komoditas -->
-        <div>
-            <label class="block text-xs font-bold text-stone-600 mb-2">1. Pilih Komoditas</label>
-            <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-                @foreach($komoditas as $item)
-                <label class="cursor-pointer">
-                    <input type="radio" name="komoditas_id" value="{{ $item->id }}" class="peer sr-only"
-                           onchange="isiHargaRekomendasi({{ $item->harga_petani }})" {{ $loop->first ? 'checked' : '' }}>
-                    <div class="p-3 rounded-2xl border-2 border-stone-200 peer-checked:border-emerald-600 peer-checked:bg-emerald-50 text-center transition h-full flex flex-col items-center justify-center">
-                        <span class="text-xl sm:text-2xl mb-1">{{ $item->ikon }}</span>
-                        <span class="text-xs font-bold text-stone-800 leading-tight">{{ $item->nama }}</span>
-                    </div>
-                </label>
-                @endforeach
-            </div>
-        </div>
-
-        <!-- Jenis Penjualan (Ready Stock / Pre-Order) & Tautkan Siklus -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+    <!-- PETA INTERAKTIF PASAR & TITIK JUAL BELI PANGAN -->
+    <div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-200/80 shadow-xs mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
             <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1">2. Jenis Penawaran</label>
-                <select name="jenis_penjualan" id="jenisPenjualan" onchange="togglePreOrder()"
-                    class="w-full px-4 py-3 rounded-xl border border-stone-300 bg-white text-sm font-semibold">
-                    <option value="ready_stock">✅ Ready Stock (Siap Diambil/Kirim)</option>
-                    <option value="preorder">⏳ Pre-Order (Pesan Sebelum Panen)</option>
-                </select>
+                <h3 class="font-extrabold text-base text-stone-800">🗺️ Peta Titik Pasar & Lokasi Jual Beli Pangan</h3>
+                <p class="text-xs text-stone-500">Klik pin <strong>🏛️ Pasar/TPI</strong> untuk melihat info pasar atau klik
+                    pin <strong>🌾 Produk</strong> untuk membeli langsung</p>
             </div>
 
-            <div id="boxEstimasiSiap" class="hidden">
-                <label class="block text-xs font-bold text-stone-600 mb-1">Perkiraan Tanggal Siap Panen</label>
-                <input type="date" name="estimasi_siap" id="inputEstimasiSiap" value="{{ date('Y-m-d', strtotime('+30 days')) }}"
-                    class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
-            </div>
-
-            @if($siklusAktif->count() > 0)
-            <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1">Tautkan ke Siklus (Opsional)</label>
-                <select name="siklus_produksi_id" id="pilihSiklusJual" onchange="isiDariSiklus()"
-                    class="w-full px-4 py-3 rounded-xl border border-stone-300 bg-white text-sm">
-                    <option value="">-- Tanpa Siklus --</option>
-                    @foreach($siklusAktif as $sk)
-                        <option value="{{ $sk->id }}"
-                                data-estimasi="{{ $sk->estimasi_hasil_kg }}"
-                                data-tanggal="{{ $sk->estimasi_tanggal_panen->format('Y-m-d') }}">
-                            {{ $sk->nama_siklus }} (~{{ number_format($sk->estimasi_hasil_kg, 0) }} kg)
-                        </option>
-                    @endforeach
-                </select>
-            </div>
-            @endif
-        </div>
-
-        <!-- Stok & Harga -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1">3. Jumlah Stok Dijual (kg)</label>
-                <input type="number" step="0.1" name="stok_kg" id="inputStokJual" placeholder="Contoh: 100" required
-                       class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-stone-600 mb-1">4. Harga Jual / kg (Rp)</label>
-                <input type="number" name="harga_jual_per_kg" id="inputHargaJual"
-                       value="{{ $komoditas->first()->harga_petani ?? 15000 }}" required
-                       class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
-            </div>
-        </div>
-
-        <!-- Pin Titik Lokasi Penjualan di Peta -->
-        <div class="pt-1">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                <label class="text-xs font-bold text-stone-600">5. Tandai Titik Lokasi Penjualan / Pengambilan Barang di Peta</label>
-                <button type="button" onclick="gunakanLokasiJual()" class="px-3 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-xs font-bold text-stone-700 cursor-pointer">
-                    🎯 Gunakan Lokasi Saya Saat Ini
+            <!-- FILTER LAYER PETA -->
+            <div class="flex flex-wrap items-center gap-1.5 bg-stone-100 p-1 rounded-2xl w-fit">
+                <button type="button" id="btnFilterSemua" onclick="filterPetaPasar('semua')"
+                    class="px-3 py-1.5 rounded-xl bg-stone-800 text-white text-xs font-bold transition cursor-pointer">
+                    Semua ({{ count($titikPasar) + $pasarListings->whereNotNull('latitude')->count() }})
+                </button>
+                <button type="button" id="btnFilterPasar" onclick="filterPetaPasar('pasar')"
+                    class="px-3 py-1.5 rounded-xl text-stone-700 hover:bg-white text-xs font-bold transition cursor-pointer">
+                    🏛️ Pasar & TPI ({{ count($titikPasar) }})
+                </button>
+                <button type="button" id="btnFilterProduk" onclick="filterPetaPasar('produk')"
+                    class="px-3 py-1.5 rounded-xl text-stone-700 hover:bg-white text-xs font-bold transition cursor-pointer">
+                    🌾 Penjual Panen ({{ $pasarListings->whereNotNull('latitude')->count() }})
                 </button>
             </div>
-            <div id="mapPickerJual" class="w-full h-52 rounded-2xl border border-stone-300 z-10"></div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2.5">
-                <input type="text" name="lokasi_jual" placeholder="Alamat / Patokan Lokasi Jual (Contoh: Pasar Raya / Gudang Blok B)" required
-                    class="px-3.5 py-2.5 rounded-xl border border-stone-300 text-xs">
-                <input type="text" name="latitude" id="jualLat" value="-0.9471000" readonly
-                    class="px-3.5 py-2.5 rounded-xl border border-stone-200 bg-stone-50 text-xs text-stone-600">
-                <input type="text" name="longitude" id="jualLng" value="100.4172000" readonly
-                    class="px-3.5 py-2.5 rounded-xl border border-stone-200 bg-stone-50 text-xs text-stone-600">
-            </div>
         </div>
 
-        <button type="submit" class="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm transition cursor-pointer">
-            Publikasikan ke Marketplace →
-        </button>
-    </form>
-</div>
+        <!-- LEGENDA WARNA PIN -->
+        <div class="flex flex-wrap items-center gap-4 text-[11px] font-bold text-stone-600 mb-3">
+            <span class="flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-amber-500 inline-block border border-white shadow-xs"></span>
+                Pasar Tradisional / TPI / Sentra Pangan
+            </span>
+            <span class="flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-emerald-600 inline-block border border-white shadow-xs"></span>
+                Titik Jual Hasil Panen / Ternak / Nelayan
+            </span>
+        </div>
 
-<!-- DAFTAR PRODUK MILIK PENGGUNA -->
-<div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-100 shadow-xs mb-6">
-    <h3 class="font-extrabold text-stone-800 mb-4 text-sm sm:text-base">Daftar Penawaran Anda ({{ $listings->count() }})</h3>
-    <div class="divide-y divide-stone-100">
-        @forelse($listings as $l)
-        <div class="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div class="flex items-center gap-3 min-w-0">
-                <span class="text-2xl flex-shrink-0">{{ $l->komoditas->ikon ?? '📦' }}</span>
-                <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <p class="font-bold text-sm text-stone-800">{{ $l->komoditas->nama ?? 'Komoditas' }}</p>
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ ($l->jenis_penjualan ?? 'ready_stock') === 'preorder' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-800' }}">
-                            {{ ($l->jenis_penjualan ?? 'ready_stock') === 'preorder' ? '⏳ Pre-Order' : '✅ Ready Stock' }}
-                        </span>
+        <div id="mapPasarUtama" class="w-full h-80 sm:h-96 rounded-2xl border border-stone-200 z-10"></div>
+    </div>
+
+    @auth
+        <!-- FORM PUBLIKASI HASIL PANEN / PRODUK -->
+        <div id="formPublikasiJual" class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-100 shadow-xs mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <h3 class="font-extrabold text-base text-stone-800">📢 Publikasikan Hasil Panen / Stok ke Pasar</h3>
+                <span class="text-xs font-bold text-emerald-700">Stok Aktif Anda: {{ $listingAktif->count() }} Produk (Potensi
+                    Rp {{ number_format($totalPendapatan, 0, ',', '.') }})</span>
+            </div>
+
+            <form action="{{ route('jual.store') }}" method="POST" class="space-y-4">
+                @csrf
+
+                <!-- PILIHAN SUMBER SIKLUS (OPSIONAL - AUTOFILL DATA PANEN) -->
+                <div class="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80">
+                    <label class="block text-xs font-extrabold text-emerald-950 mb-1">
+                        🌱 Sumber Siklus Produksi (Opsional — Otomatis Isi Komoditas & Stok)
+                    </label>
+                    <select id="selectSiklusJual" name="siklus_produksi_id" onchange="terapkanDataSiklus()"
+                        class="w-full px-4 py-2.5 rounded-xl border border-emerald-300 bg-white text-sm font-semibold text-stone-800">
+                        <option value="">-- Tanpa Siklus Spesifik (Input Manual / Tangkapan Harian / Olahan) --</option>
+                        @foreach($siklusAktif as $sk)
+                            @php
+                                $stokSiklus = $sk->status === 'selesai'
+                                    ? ($sk->hasil_aktual_kg ?? $sk->estimasi_hasil_kg)
+                                    : $sk->estimasi_hasil_kg;
+                            @endphp
+                            <option value="{{ $sk->id }}" data-komoditas="{{ $sk->komoditas_id }}" data-stok="{{ $stokSiklus }}"
+                                data-status="{{ $sk->status }}"
+                                data-estimasi="{{ $sk->estimasi_tanggal_panen ? $sk->estimasi_tanggal_panen->format('Y-m-d') : '' }}"
+                                data-alamat="{{ $sk->alamat_lahan ?? '' }}" data-lat="{{ $sk->latitude ?? '' }}"
+                                data-lng="{{ $sk->longitude ?? '' }}">
+                                {{ $sk->status === 'selesai' ? '✅ [Siap Panen]' : '⏳ [Berjalan]' }} {{ $sk->nama_siklus }} —
+                                {{ $sk->komoditas->nama ?? '' }} ({{ number_format($stokSiklus, 0, ',', '.') }} kg)
+                            </option>
+                        @endforeach
+                    </select>
+                    <p id="infoAutofillSiklus" class="text-[11px] text-emerald-800 font-semibold mt-1.5 hidden"></p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-stone-600 mb-1">Komoditas</label>
+                        <select id="inputKomoditasJual" name="komoditas_id" required
+                            class="w-full px-4 py-3 rounded-xl border border-stone-300 bg-white text-sm font-semibold">
+                            @foreach($semuaKomoditas as $km)
+                                <option value="{{ $km->id }}" {{ (string) request('komoditas_id') === (string) $km->id ? 'selected' : '' }}>
+                                    {{ $km->ikon ?? '🌱' }} {{ $km->nama }}
+                                </option>
+                            @endforeach
+                        </select>
                     </div>
-                    <p class="text-xs text-stone-500 mt-0.5">
-                        Stok: <strong>{{ number_format($l->stok_kg, 0, ',', '.') }} kg</strong> • Lokasi: {{ $l->lokasi_jual ?? 'Belum diisi' }}
-                    </p>
+
+                    <div>
+                        <label class="block text-xs font-bold text-stone-600 mb-1">Stok Tersedia (kg / unit)</label>
+                        <input type="number" step="0.1" id="inputStokJual" name="stok_kg" value="{{ request('stok_kg') }}"
+                            placeholder="Contoh: 150" required
+                            class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-stone-600 mb-1">Harga Jual per kg (Rp)</label>
+                        <input type="text" name="harga_jual_per_kg" data-rupiah placeholder="Contoh: 28.000" required
+                            class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-stone-600 mb-1">Jenis Penjualan</label>
+                        <select id="jenisPenjualan" name="jenis_penjualan" onchange="toggleEstimasiSiap()"
+                            class="w-full px-4 py-3 rounded-xl border border-stone-300 bg-white text-sm font-semibold">
+                            <option value="ready_stock">✅ Ready Stock (Siap Angkut)</option>
+                            <option value="preorder">⏳ Pre-Order (Akan Panen)</option>
+                        </select>
+                    </div>
                 </div>
-            </div>
 
-            <div class="flex items-center gap-2">
-                <p class="font-extrabold text-sm text-emerald-700 mr-2">Rp {{ number_format($l->harga_jual_per_kg, 0, ',', '.') }}/kg</p>
-                @if($l->status === 'aktif')
-                <form action="{{ route('jual.update', $l->id) }}" method="POST">
-                    @csrf @method('PUT')
-                    <input type="hidden" name="aksi" value="terjual">
-                    <button type="submit" class="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold cursor-pointer">✓ Terjual</button>
-                </form>
-                @endif
-                <form action="{{ route('jual.destroy', $l->id) }}" method="POST" onsubmit="return confirm('Hapus penawaran ini?')">
-                    @csrf @method('DELETE')
-                    <button type="submit" class="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold cursor-pointer">🗑️</button>
-                </form>
-            </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-stone-600 mb-1">Nama Pasar / Lokasi Titik Jual</label>
+                        <input type="text" id="inputLokasiJual" name="lokasi_jual"
+                            placeholder="Contoh: Pasar Raya Padang / Lahan Lakitan" required
+                            class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
+                    </div>
+
+                    <div id="wrapEstimasiSiap" class="hidden">
+                        <label class="block text-xs font-bold text-stone-600 mb-1">Estimasi Tanggal Siap Panen</label>
+                        <input type="date" id="inputEstimasiSiap" name="estimasi_siap"
+                            class="w-full px-4 py-3 rounded-xl border border-stone-300 text-sm">
+                    </div>
+                </div>
+
+                <!-- KOORDINAT LOKASI JUAL -->
+                <div
+                    class="p-3.5 rounded-2xl bg-stone-50 border border-stone-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="text-xs text-stone-600">
+                        <p class="font-extrabold text-stone-800">📍 Koordinat Titik Jual di Peta</p>
+                        <p class="text-[11px] text-stone-500">Klik tanda <strong>🏛️ Pasar</strong> di peta atas lalu tekan
+                            <em>"Jual di Pasar Ini"</em>, atau klik langsung titik lokasi Anda di peta.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input type="text" id="jualLat" name="latitude" placeholder="Latitude" readonly
+                            class="w-28 px-3 py-2 rounded-lg bg-white border border-stone-200 text-xs">
+                        <input type="text" id="jualLng" name="longitude" placeholder="Longitude" readonly
+                            class="w-28 px-3 py-2 rounded-lg bg-white border border-stone-200 text-xs">
+                        <button type="button" onclick="gunakanGpsJual()"
+                            class="px-3 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold cursor-pointer">
+                            🎯 GPS Saya
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit"
+                    class="px-6 py-3.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-sm transition cursor-pointer">
+                    Publikasikan ke Pasar PanganKu →
+                </button>
+            </form>
         </div>
-        @empty
-        <p class="text-xs text-stone-500 py-4 text-center">Anda belum mempublikasikan penawaran jual.</p>
-        @endforelse
+    @endauth
+
+    <!-- KATALOG PRODUK YANG SEDANG DIJUAL DI PASAR -->
+    <div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-100 shadow-xs mb-6">
+        <h3 class="font-extrabold text-base text-stone-800 mb-4">🛒 Katalog Hasil Pangan Tersedia
+            ({{ $pasarListings->count() }})</h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            @forelse($pasarListings as $item)
+                <div class="p-4 rounded-2xl border border-stone-200/80 bg-stone-50/50 flex flex-col justify-between gap-3">
+                    <div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span
+                                class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase {{ $item->jenis_penjualan === 'ready_stock' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900' }}">
+                                {{ $item->jenis_penjualan === 'ready_stock' ? '✅ Ready Stock' : '⏳ Pre-Order' }}
+                            </span>
+                            <span class="text-[11px] font-bold text-stone-500">
+                                Stok: {{ number_format($item->stok_kg, 0, ',', '.') }} kg
+                            </span>
+                        </div>
+
+                        <h4 class="font-extrabold text-base text-stone-800 mt-2">
+                            {{ $item->komoditas->ikon ?? '🌾' }} {{ $item->komoditas->nama ?? 'Komoditas' }}
+                        </h4>
+                        <p class="font-extrabold text-lg text-emerald-700 mt-0.5">
+                            Rp {{ number_format($item->harga_jual_per_kg, 0, ',', '.') }} <span
+                                class="text-xs font-normal text-stone-500">/ kg</span>
+                        </p>
+
+                        <p class="text-xs text-stone-600 mt-2">
+                            👤 Penjual: <strong>{{ $item->user->name ?? 'Mitra Pangan' }}</strong><br>
+                            📍 Lokasi: {{ $item->lokasi_jual }}
+                            @if($item->siklus)
+                                <br>🌱 Sumber: <span class="font-semibold text-emerald-800">{{ $item->siklus->nama_siklus }}</span>
+                            @endif
+                        </p>
+                    </div>
+
+                    <div class="pt-2 border-t border-stone-200/70 flex items-center justify-between gap-2">
+                        @if($item->latitude && $item->longitude)
+                            <button type="button" onclick="fokusKePeta({{ $item->latitude }}, {{ $item->longitude }})"
+                                class="px-3 py-1.5 rounded-xl bg-stone-200/80 hover:bg-stone-300 text-stone-800 text-xs font-bold cursor-pointer">
+                                🗺️ Lihat di Peta
+                            </button>
+                        @else
+                            <span class="text-[11px] text-stone-400">Tanpa pin peta</span>
+                        @endif
+
+                        @if(auth()->id() === $item->user_id)
+                            <div class="flex items-center gap-1.5">
+                                <form action="{{ route('jual.update', $item->id) }}" method="POST">
+                                    @csrf
+                                    @method('PUT')
+                                    <input type="hidden" name="aksi" value="terjual">
+                                    <button type="submit"
+                                        class="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold cursor-pointer">
+                                        ✓ Tandai Terjual
+                                    </button>
+                                </form>
+                                <form action="{{ route('jual.destroy', $item->id) }}" method="POST"
+                                    onsubmit="return confirm('Hapus listing ini?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit"
+                                        class="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold cursor-pointer">
+                                        🗑️
+                                    </button>
+                                </form>
+                            </div>
+                        @else
+                            <a href="https://wa.me/?text={{ urlencode('Halo ' . ($item->user->name ?? 'Mitra') . ', saya tertarik membeli ' . ($item->komoditas->nama ?? 'komoditas') . ' sebanyak ' . $item->stok_kg . ' kg di PanganKu Nasional.') }}"
+                                target="_blank"
+                                class="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">
+                                💬 Hubungi Penjual
+                            </a>
+                        @endif
+                    </div>
+                </div>
+            @empty
+                <p class="col-span-full text-xs text-stone-500 py-6 text-center">Belum ada hasil panen yang dipublikasikan di
+                    pasar saat ini.</p>
+            @endforelse
+        </div>
     </div>
-</div>
-@endif
 
-<!-- ETALASE MARKETPLACE PUBLIK -->
-<div class="bg-white p-5 sm:p-6 rounded-3xl border border-stone-100 shadow-xs">
-    <h3 class="font-extrabold text-stone-800 text-sm sm:text-base mb-4">🌾 Etalase Bahan Pangan Siap Beli & Pre-Order</h3>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const titikPasarData = @json($titikPasar);
+        const produkListingsData = @json($pasarListings);
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-        @forelse($pasarListings as $itemPasar)
-        <div class="p-4 rounded-2xl border border-stone-200/80 bg-stone-50/50 flex flex-col justify-between">
-            <div>
-                <div class="flex items-center justify-between gap-2 mb-2">
-                    <span class="text-2xl">{{ $itemPasar->komoditas->ikon ?? '🌾' }}</span>
-                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase {{ ($itemPasar->jenis_penjualan ?? 'ready_stock') === 'preorder' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-800' }}">
-                        {{ ($itemPasar->jenis_penjualan ?? 'ready_stock') === 'preorder' ? '⏳ Pre-Order' : '✅ Ready Stock' }}
+        const mapPasar = L.map('mapPasarUtama').setView([-1.05, 100.42], 9);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(mapPasar);
+
+        const layerPasar = L.layerGroup().addTo(mapPasar);
+        const layerProduk = L.layerGroup().addTo(mapPasar);
+        let markerPilihanUser = null;
+
+        // 1. Render Pin Pasar Tradisional / TPI / Sentra Jual Beli
+        titikPasarData.forEach((pasar) => {
+            const iconPasar = L.divIcon({
+                className: '',
+                html: `<div class="custom-pin bg-amber-500 text-white w-9 h-9">🏛️</div>`,
+                iconSize: [36, 36],
+                iconAnchor: [18, 18]
+            });
+
+            const marker = L.marker([pasar.lat, pasar.lng], { icon: iconPasar }).addTo(layerPasar);
+            marker.bindPopup(`
+                <div style="min-width: 200px; font-family: sans-serif;">
+                    <span style="display:inline-block; background:#fef3c7; color:#92400e; font-size:10px; font-weight:800; padding:2px 8px; border-radius:99px; text-transform:uppercase;">
+                        ${pasar.jenis}
                     </span>
-                </div>
-                <h4 class="font-extrabold text-sm text-stone-800">{{ $itemPasar->komoditas->nama ?? 'Komoditas' }}</h4>
-                <p class="text-xs text-stone-600 mt-0.5">Penjual: <strong>{{ $itemPasar->user->name ?? 'Mitra' }}</strong></p>
-                <p class="text-[11px] text-stone-500 mt-1">📍 {{ $itemPasar->lokasi_jual ?? ($itemPasar->user->lokasi ?? 'Lokasi belum dicantumkan') }}</p>
-                @if(($itemPasar->jenis_penjualan ?? '') === 'preorder' && $itemPasar->estimasi_siap)
-                    <p class="text-[11px] font-bold text-amber-800 mt-1">📅 Estimasi Siap: {{ \Carbon\Carbon::parse($itemPasar->estimasi_siap)->format('d M Y') }}</p>
-                @endif
-            </div>
-
-            <div class="mt-3 pt-3 border-t border-stone-200/70 flex items-center justify-between">
-                <div>
-                    <p class="text-[10px] text-stone-400">Harga Jual</p>
-                    <p class="font-extrabold text-sm text-emerald-700">Rp {{ number_format($itemPasar->harga_jual_per_kg, 0, ',', '.') }}/kg</p>
-                </div>
-                <span class="text-xs font-bold text-stone-700 bg-white px-2.5 py-1 rounded-lg border border-stone-200">
-                    {{ number_format($itemPasar->stok_kg, 0, ',', '.') }} kg
-                </span>
-            </div>
-        </div>
-        @empty
-        <p class="text-xs text-stone-500 col-span-full py-4 text-center">Belum ada stok aktif di marketplace saat ini.</p>
-        @endforelse
-    </div>
-</div>
-
-<script>
-    // 1. Peta Sebaran Titik Penjualan (Publik)
-    const mapMarket = L.map('mapMarketplace').setView([-0.9471, 100.4172], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapMarket);
-
-    const dataPasar = @json($pasarListings);
-    const bounds = [];
-
-    dataPasar.forEach(item => {
-        if (item.latitude && item.longitude) {
-            const lat = parseFloat(item.latitude);
-            const lng = parseFloat(item.longitude);
-            bounds.push([lat, lng]);
-
-            const badge = item.jenis_penjualan === 'preorder' ? '⏳ PRE-ORDER' : '✅ READY STOCK';
-            const namaKomoditas = item.komoditas ? item.komoditas.nama : 'Komoditas';
-            const namaPenjual = item.user ? item.user.name : 'Mitra';
-
-            L.marker([lat, lng]).addTo(mapMarket).bindPopup(`
-                <div style="font-family: sans-serif; min-width: 160px;">
-                    <strong style="font-size: 13px;">${namaKomoditas}</strong><br>
-                    <span style="font-size: 11px; color: #047857; font-weight: bold;">${badge}</span><br>
-                    <span style="font-size: 12px;">Harga: <b>Rp ${Number(item.harga_jual_per_kg).toLocaleString('id-ID')}/kg</b></span><br>
-                    <span style="font-size: 12px;">Stok: <b>${item.stok_kg} kg</b></span><br>
-                    <span style="font-size: 11px; color: #555;">Penjual: ${namaPenjual}<br>📍 ${item.lokasi_jual || ''}</span>
+                    <h4 style="margin:6px 0 4px; font-weight:800; font-size:13px; color:#1c1917;">${pasar.nama}</h4>
+                    <p style="margin:0 0 4px; font-size:11px; color:#57534e;">🕒 ${pasar.jam_operasional}</p>
+                    <p style="margin:0 0 8px; font-size:11px; color:#57534e;">🧺 Komoditas: <strong>${pasar.komoditas_utama}</strong></p>
+                    <button type="button" onclick="pilihPasarUntukJual('${pasar.nama.replace(/'/g, "\\'")}', ${pasar.lat}, ${pasar.lng})"
+                        style="width:100%; background:#047857; color:#fff; border:none; padding:6px 10px; border-radius:8px; font-size:11px; font-weight:700; cursor:pointer;">
+                        📍 Jual Hasil di Pasar Ini
+                    </button>
                 </div>
             `);
-        }
-    });
-
-    if (bounds.length > 0) {
-        mapMarket.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
-    }
-
-    // 2. Peta Picker Lokasi Jual (Untuk Produsen yang Login)
-    const pickerEl = document.getElementById('mapPickerJual');
-    if (pickerEl) {
-        const mapPicker = L.map('mapPickerJual').setView([-0.9471, 100.4172], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(mapPicker);
-        const markerJual = L.marker([-0.9471, 100.4172], { draggable: true }).addTo(mapPicker);
-
-        function setKoordinatJual(lat, lng) {
-            document.getElementById('jualLat').value = lat.toFixed(7);
-            document.getElementById('jualLng').value = lng.toFixed(7);
-        }
-
-        mapPicker.on('click', e => {
-            markerJual.setLatLng(e.latlng);
-            setKoordinatJual(e.latlng.lat, e.latlng.lng);
         });
 
-        markerJual.on('dragend', () => {
-            const p = markerJual.getLatLng();
-            setKoordinatJual(p.lat, p.lng);
-        });
+        // 2. Render Pin Penjual / Hasil Panen Aktif
+        produkListingsData.forEach((item) => {
+            if (!item.latitude || !item.longitude) return;
 
-        window.gunakanLokasiJual = function() {
-            if (!navigator.geolocation) return alert('GPS tidak didukung browser.');
-            navigator.geolocation.getCurrentPosition(pos => {
-                mapPicker.setView([pos.coords.latitude, pos.coords.longitude], 15);
-                markerJual.setLatLng([pos.coords.latitude, pos.coords.longitude]);
-                setKoordinatJual(pos.coords.latitude, pos.coords.longitude);
+            const ikonKomoditas = item.komoditas?.ikon || '🌾';
+            const namaKomoditas = item.komoditas?.nama || 'Komoditas';
+            const harga = Number(item.harga_jual_per_kg).toLocaleString('id-ID');
+
+            const iconProduk = L.divIcon({
+                className: '',
+                html: `<div class="custom-pin bg-emerald-600 text-white w-9 h-9">${ikonKomoditas}</div>`,
+                iconSize: [36, 36],
+                iconAnchor: [18, 18]
             });
-        };
-    }
 
-    function togglePreOrder() {
-        const jenis = document.getElementById('jenisPenjualan').value;
-        document.getElementById('boxEstimasiSiap').classList.toggle('hidden', jenis !== 'preorder');
-    }
+            const marker = L.marker([item.latitude, item.longitude], { icon: iconProduk }).addTo(layerProduk);
+            marker.bindPopup(`
+                <div style="min-width: 190px; font-family: sans-serif;">
+                    <span style="display:inline-block; background:#d1fae5; color:#065f46; font-size:10px; font-weight:800; padding:2px 8px; border-radius:99px;">
+                        ${item.jenis_penjualan === 'ready_stock' ? 'READY STOCK' : 'PRE-ORDER'}
+                    </span>
+                    <h4 style="margin:6px 0 2px; font-weight:800; font-size:13px; color:#1c1917;">${ikonKomoditas} ${namaKomoditas}</h4>
+                    <p style="margin:0 0 4px; font-weight:800; font-size:13px; color:#047857;">Rp ${harga} / kg</p>
+                    <p style="margin:0; font-size:11px; color:#57534e;">Stok: ${item.stok_kg} kg • ${item.lokasi_jual}</p>
+                </div>
+            `);
+        });
 
-    function isiDariSiklus() {
-        const sel = document.getElementById('pilihSiklusJual');
-        const opt = sel.options[sel.selectedIndex];
-        if (opt && opt.value) {
-            document.getElementById('jenisPenjualan').value = 'preorder';
-            togglePreOrder();
-            document.getElementById('inputStokJual').value = opt.dataset.estimasi;
-            document.getElementById('inputEstimasiSiap').value = opt.dataset.tanggal;
+        // Klik bebas di peta untuk menandai titik jual penjual
+        mapPasar.on('click', function (e) {
+            const inputLat = document.getElementById('jualLat');
+            const inputLng = document.getElementById('jualLng');
+            if (!inputLat || !inputLng) return;
+
+            inputLat.value = e.latlng.lat.toFixed(6);
+            inputLng.value = e.latlng.lng.toFixed(6);
+
+            if (markerPilihanUser) mapPasar.removeLayer(markerPilihanUser);
+            markerPilihanUser = L.marker([e.latlng.lat, e.latlng.lng]).addTo(mapPasar)
+                .bindPopup('📍 Titik lokasi penjualan Anda').openPopup();
+        });
+
+        function pilihPasarUntukJual(namaPasar, lat, lng) {
+            const inputLokasi = document.getElementById('inputLokasiJual');
+            const inputLat = document.getElementById('jualLat');
+            const inputLng = document.getElementById('jualLng');
+
+            if (!inputLokasi) {
+                alert('Silakan masuk (login) terlebih dahulu untuk mempublikasikan hasil panen di pasar ini.');
+                return;
+            }
+
+            inputLokasi.value = namaPasar;
+            inputLat.value = lat.toFixed(6);
+            inputLng.value = lng.toFixed(6);
+
+            document.getElementById('formPublikasiJual').scrollIntoView({ behavior: 'smooth' });
         }
-    }
 
-    function isiHargaRekomendasi(harga) {
-        const input = document.getElementById('inputHargaJual');
-        if (input && harga > 0) input.value = harga;
-    }
-</script>
+        function filterPetaPasar(mode) {
+            const btns = ['btnFilterSemua', 'btnFilterPasar', 'btnFilterProduk'];
+            btns.forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.remove('bg-stone-800', 'text-white');
+                el.classList.add('text-stone-700');
+            });
+
+            if (mode === 'semua') {
+                mapPasar.addLayer(layerPasar);
+                mapPasar.addLayer(layerProduk);
+                document.getElementById('btnFilterSemua').classList.add('bg-stone-800', 'text-white');
+            } else if (mode === 'pasar') {
+                mapPasar.addLayer(layerPasar);
+                mapPasar.removeLayer(layerProduk);
+                document.getElementById('btnFilterPasar').classList.add('bg-stone-800', 'text-white');
+            } else {
+                mapPasar.removeLayer(layerPasar);
+                mapPasar.addLayer(layerProduk);
+                document.getElementById('btnFilterProduk').classList.add('bg-stone-800', 'text-white');
+            }
+        }
+
+        function fokusKePeta(lat, lng) {
+            mapPasar.setView([lat, lng], 15);
+            document.getElementById('mapPasarUtama').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function gunakanGpsJual() {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition((pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                document.getElementById('jualLat').value = lat.toFixed(6);
+                document.getElementById('jualLng').value = lng.toFixed(6);
+                mapPasar.setView([lat, lng], 15);
+
+                if (markerPilihanUser) mapPasar.removeLayer(markerPilihanUser);
+                markerPilihanUser = L.marker([lat, lng]).addTo(mapPasar)
+                    .bindPopup('📍 Lokasi GPS Anda saat ini').openPopup();
+            });
+        }
+
+        function toggleEstimasiSiap() {
+            const jenis = document.getElementById('jenisPenjualan').value;
+            const wrap = document.getElementById('wrapEstimasiSiap');
+            if (jenis === 'preorder') {
+                wrap.classList.remove('hidden');
+            } else {
+                wrap.classList.add('hidden');
+            }
+        }
+
+        function terapkanDataSiklus() {
+            const select = document.getElementById('selectSiklusJual');
+            const opt = select.options[select.selectedIndex];
+            const info = document.getElementById('infoAutofillSiklus');
+
+            if (!select.value) {
+                info.classList.add('hidden');
+                return;
+            }
+
+            const komoditasId = opt.dataset.komoditas;
+            const stok = opt.dataset.stok;
+            const status = opt.dataset.status;
+            const estimasi = opt.dataset.estimasi;
+            const alamat = opt.dataset.alamat;
+            const lat = opt.dataset.lat;
+            const lng = opt.dataset.lng;
+
+            if (komoditasId) document.getElementById('inputKomoditasJual').value = komoditasId;
+            if (stok) document.getElementById('inputStokJual').value = stok;
+
+            const jenisSelect = document.getElementById('jenisPenjualan');
+            if (status === 'selesai') {
+                jenisSelect.value = 'ready_stock';
+            } else {
+                jenisSelect.value = 'preorder';
+                if (estimasi) document.getElementById('inputEstimasiSiap').value = estimasi;
+            }
+            toggleEstimasiSiap();
+
+            if (alamat && !document.getElementById('inputLokasiJual').value) {
+                document.getElementById('inputLokasiJual').value = alamat;
+            }
+            if (lat && lng) {
+                document.getElementById('jualLat').value = Number(lat).toFixed(6);
+                document.getElementById('jualLng').value = Number(lng).toFixed(6);
+            }
+
+            info.textContent = `✓ Data komoditas & stok (${stok} kg) otomatis diisi dari siklus terpilih. Anda tetap dapat menyesuaikan angkanya sebelum publikasi.`;
+            info.classList.remove('hidden');
+        }
+    </script>
 
 @endsection
