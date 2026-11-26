@@ -106,6 +106,11 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [AdminController::class, 'dashboard'])->name('dashboard');
 
+    Route::get('/wilayah-spk', [AdminController::class, 'wilayahSpk'])->name('wilayah');
+    Route::post('/wilayah-spk', [AdminController::class, 'storeWilayahSpk'])->name('wilayah.store');
+    Route::put('/wilayah-spk/{id}', [AdminController::class, 'updateWilayahSpk'])->name('wilayah.update');
+    Route::delete('/wilayah-spk/{id}', [AdminController::class, 'destroyWilayahSpk'])->name('wilayah.destroy');
+
     // Moderasi Verifikasi Dokumen Upgrade Peran
     Route::post('/verifikasi-peran/{userId}', [AuthVerifikasiController::class, 'adminPutuskanPeran'])->name('verifikasi.peran');
 

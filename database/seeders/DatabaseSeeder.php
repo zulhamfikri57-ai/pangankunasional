@@ -144,17 +144,21 @@ class DatabaseSeeder extends Seeder
                 $item
             );
         }
-        // Akun Administrator Utama (Bukan Akun Demo)
-        \App\Models\User::updateOrCreate(
-            ['email' => env('ADMIN_EMAIL', 'zulhamfikri57@gmail.com')],
-            [
-                'name' => 'Zulham Fikri Habib',
-                'password' => \Illuminate\Support\Facades\Hash::make(env('ADMIN_PASSWORD', 'AdminPanganKu2026')),
-                'peran_sektor' => 'admin',
-                'is_admin' => true,
-                'is_kontak_verified' => true,
-                'email_verified_at' => now(),
-            ]
-        );
+        // Akun Administrator Utama (Kredensial wajib diatur di file .env)
+        $adminEmail = env('ADMIN_EMAIL');
+        $adminPassword = env('ADMIN_PASSWORD');
+
+        if ($adminEmail && $adminPassword) {
+            \App\Models\User::updateOrCreate(
+                ['email' => $adminEmail],
+                [
+                    'name' => env('ADMIN_NAME', 'Zulham Fikri Habib'),
+                    'password' => \Illuminate\Support\Facades\Hash::make($adminPassword),
+                    'peran_sektor' => 'admin',
+                    'is_kontak_verified' => true,
+                    'email_verified_at' => now(),
+                ]
+            );
+        }
     }
 }

@@ -9,6 +9,7 @@ use App\Models\Produksi;
 use App\Models\ListingPanen;
 use App\Models\Keuangan;
 use App\Models\PanduanTanam;
+use App\Models\WilayahDistribusi;
 
 class AdminController extends Controller
 {
@@ -188,5 +189,63 @@ class AdminController extends Controller
     {
         PanduanTanam::findOrFail($id)->delete();
         return redirect()->route('admin.panduan')->with('success', 'Materi panduan berhasil dihapus!');
+    }
+
+    // --- MANAJEMEN WILAYAH DISTRIBUSI SPK (SAW) ---
+    public function wilayahSpk()
+    {
+        $wilayahList = WilayahDistribusi::orderBy('provinsi')->orderBy('nama_wilayah')->get();
+        return view('admin.wilayah-spk', compact('wilayahList'));
+    }
+
+    public function storeWilayahSpk(Request $request)
+    {
+        $request->validate([
+            'nama_wilayah' => 'required|string|max:120',
+            'provinsi' => 'required|string|max:100',
+            'tingkat_defisit' => 'required|integer|min:1|max:100',
+            'biaya_logistik_kg' => 'required|numeric|min:100',
+            'faktor_harga' => 'required|numeric|min:0.5|max:3',
+            'jarak_km' => 'required|numeric|min:0',
+        ]);
+
+        WilayahDistribusi::create([
+            'nama_wilayah' => $request->nama_wilayah,
+            'provinsi' => $request->provinsi,
+            'tingkat_defisit' => $request->tingkat_defisit,
+            'biaya_logistik_kg' => $request->biaya_logistik_kg,
+            'faktor_harga' => $request->faktor_harga,
+            'jarak_km' => $request->jarak_km,
+            'is_aktif' => true,
+        ]);
+
+        return redirect()->route('admin.wilayah')->with('success', 'Wilayah distribusi SPK baru berhasil ditambahkan!');
+    }
+
+    public function updateWilayahSpk(Request $request, $id)
+    {
+        $request->validate([
+            'tingkat_defisit' => 'required|integer|min:1|max:100',
+            'biaya_logistik_kg' => 'required|numeric|min:100',
+            'faktor_harga' => 'required|numeric|min:0.5|max:3',
+            'jarak_km' => 'required|numeric|min:0',
+        ]);
+
+        $wilayah = WilayahDistribusi::findOrFail($id);
+        $wilayah->update([
+            'tingkat_defisit' => $request->tingkat_defisit,
+            'biaya_logistik_kg' => $request->biaya_logistik_kg,
+            'faktor_harga' => $request->faktor_harga,
+            'jarak_km' => $request->jarak_km,
+            'is_aktif' => $request->has('is_aktif'),
+        ]);
+
+        return redirect()->route('admin.wilayah')->with('success', "Parameter SPK wilayah {$wilayah->nama_wilayah} diperbarui!");
+    }
+
+    public function destroyWilayahSpk($id)
+    {
+        WilayahDistribusi::findOrFail($id)->delete();
+        return redirect()->route('admin.wilayah')->with('success', 'Wilayah distribusi SPK dihapus!');
     }
 }

@@ -2,61 +2,41 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\komoditas;
+use App\Models\Komoditas;
 use App\Models\ListingPanen;
+use App\Models\WilayahDistribusi;
 use Illuminate\Http\Request;
 
 class SpkDistribusiController extends Controller
 {
     public function index(Request $request)
     {
-        $daftarKomoditas = komoditas::orderBy('nama')->get();
+        $daftarKomoditas = Komoditas::orderBy('nama')->get();
         $komoditasId = $request->get('komoditas_id', $daftarKomoditas->first()?->id);
-        $komoditasTerpilih = komoditas::find($komoditasId);
+        $komoditasTerpilih = Komoditas::find($komoditasId);
 
-        // Data alternatif wilayah tujuan distribusi & proyeksi kebutuhan
-        // Kriteria SAW:
-        // C1 (Benefit, Bobot 0.40): Selisih Harga Pasar Tujuan vs Harga Produsen (Rp/kg)
-        // C2 (Benefit, Bobot 0.35): Tingkat Defisit / Permintaan Pasar (%)
-        // C3 (Cost,    Bobot 0.25): Estimasi Biaya & Jarak Logistik (Rp/kg)
-        $alternatifWilayah = [
-            [
-                'wilayah' => 'Kota Padang (Pasar Raya & Induk)',
-                'harga_pasar_tujuan' => ($komoditasTerpilih->harga_pasar ?? 30000) * 1.18,
-                'tingkat_defisit' => 85,
-                'biaya_logistik_kg' => 1500,
-            ],
-            [
-                'wilayah' => 'Kota Bukittinggi & Agam',
-                'harga_pasar_tujuan' => ($komoditasTerpilih->harga_pasar ?? 30000) * 1.12,
-                'tingkat_defisit' => 70,
-                'biaya_logistik_kg' => 2200,
-            ],
-            [
-                'wilayah' => 'Kota Pekanbaru (Lintas Provinsi)',
-                'harga_pasar_tujuan' => ($komoditasTerpilih->harga_pasar ?? 30000) * 1.28,
-                'tingkat_defisit' => 92,
-                'biaya_logistik_kg' => 3800,
-            ],
-            [
-                'wilayah' => 'Kabupaten Pesisir Selatan (Pasar Lokal)',
-                'harga_pasar_tujuan' => ($komoditasTerpilih->harga_pasar ?? 30000) * 1.02,
-                'tingkat_defisit' => 45,
-                'biaya_logistik_kg' => 600,
-            ],
-        ];
-
+        $hargaDasarPasar = $komoditasTerpilih->harga_pasar ?? 30000;
         $hargaProdusen = $komoditasTerpilih->harga_petani ?? 24000;
 
-        // Hitung nilai mentah setiap kriteria
-        $matriks = collect($alternatifWilayah)->map(function ($item) use ($hargaProdusen) {
-            $selisihHarga = max(100, $item['harga_pasar_tujuan'] - $hargaProdusen);
+        // Ambil alternatif wilayah aktif dari database
+        $wilayahDb = WilayahDistribusi::where('is_aktif', true)->get();
+
+        // Hitung nilai mentah setiap kriteria SAW:
+        // C1 (Benefit, 0.40): Selisih Harga Pasar Tujuan vs Harga Produsen (Rp/kg)
+        // C2 (Benefit, 0.35): Tingkat Defisit / Permintaan Pasar (%)
+        // C3 (Cost,    0.25): Estimasi Biaya Logistik (Rp/kg)
+        $matriks = $wilayahDb->map(function ($w) use ($hargaDasarPasar, $hargaProdusen) {
+            $hargaTujuan = $hargaDasarPasar * (float) $w->faktor_harga;
+            $selisihHarga = max(100, $hargaTujuan - $hargaProdusen);
+
             return [
-                'wilayah' => $item['wilayah'],
-                'harga_pasar_tujuan' => round($item['harga_pasar_tujuan']),
+                'wilayah' => $w->nama_wilayah,
+                'provinsi' => $w->provinsi,
+                'jarak_km' => (float) $w->jarak_km,
+                'harga_pasar_tujuan' => round($hargaTujuan),
                 'c1_selisih' => $selisihHarga,
-                'c2_defisit' => $item['tingkat_defisit'],
-                'c3_logistik' => $item['biaya_logistik_kg'],
+                'c2_defisit' => (int) $w->tingkat_defisit,
+                'c3_logistik' => max(100, (float) $w->biaya_logistik_kg),
             ];
         });
 
@@ -66,9 +46,9 @@ class SpkDistribusiController extends Controller
         $minC3 = $matriks->min('c3_logistik') ?: 1;
 
         // Bobot Kriteria (Total = 1.00)
-        $w1 = 0.40; // Margin Harga
-        $w2 = 0.35; // Tingkat Defisit/Permintaan
-        $w3 = 0.25; // Efisiensi Biaya Logistik (Cost)
+        $w1 = 0.40;
+        $w2 = 0.35;
+        $w3 = 0.25;
 
         // Hitung Skor Akhir SAW & Rekomendasi Harga Jual Wajar Produsen
         $hasilSpk = $matriks->map(function ($row) use ($maxC1, $maxC2, $minC3, $w1, $w2, $w3, $hargaProdusen) {
@@ -78,7 +58,6 @@ class SpkDistribusiController extends Controller
 
             $skorAkhir = ($r1 * $w1) + ($r2 * $w2) + ($r3 * $w3);
 
-            // Rekomendasi harga jual wajar produsen (harga dasar + 45% margin bersih setelah logistik)
             $marginBersih = max(0, $row['harga_pasar_tujuan'] - $hargaProdusen - $row['c3_logistik']);
             $rekomendasiHargaProdusen = round($hargaProdusen + ($marginBersih * 0.45), -2);
 
@@ -92,9 +71,9 @@ class SpkDistribusiController extends Controller
             ]);
         })->sortByDesc('skor_saw')->values();
 
-        // Total stok tersedia dari listing panen aktif untuk komoditas terpilih
+        // Sinkron dengan status 'aktif' di ListingPanen
         $totalStokTersedia = ListingPanen::where('komoditas_id', $komoditasId)
-            ->where('status', 'tersedia')
+            ->where('status', 'aktif')
             ->sum('stok_kg');
 
         return view('pages.spk-distribusi', compact(

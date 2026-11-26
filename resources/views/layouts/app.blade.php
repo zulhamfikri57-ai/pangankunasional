@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,11 +12,12 @@
         }
     </style>
 </head>
+
 <body class="bg-stone-50 text-stone-800 antialiased min-h-screen">
 
     <!-- BACKDROP MOBILE SIDEBAR -->
-    <div id="sidebarBackdrop" onclick="toggleSidebar()"
-        class="fixed inset-0 bg-stone-900/40 z-40 hidden lg:hidden"></div>
+    <div id="sidebarBackdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-stone-900/40 z-40 hidden lg:hidden">
+    </div>
 
     <!-- SIDEBAR KIRI -->
     <aside id="leftSidebar"
@@ -24,15 +26,18 @@
         <!-- Brand Logo -->
         <div class="h-16 px-5 border-b border-stone-100 flex items-center justify-between shrink-0">
             <a href="{{ route('beranda') }}" class="flex items-center gap-2.5">
-                <div class="w-9 h-9 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-extrabold text-lg shadow-sm">
+                <div
+                    class="w-9 h-9 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-extrabold text-lg shadow-sm">
                     🌾
                 </div>
                 <div>
-                    <span class="font-extrabold text-base text-stone-900 tracking-tight block leading-none">PanganKu</span>
+                    <span
+                        class="font-extrabold text-base text-stone-900 tracking-tight block leading-none">PanganKu</span>
                     <span class="text-[10px] font-bold text-emerald-700 tracking-wider uppercase">Nasional</span>
                 </div>
             </a>
-            <button type="button" onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-xl text-stone-500 hover:bg-stone-100">
+            <button type="button" onclick="toggleSidebar()"
+                class="lg:hidden p-1.5 rounded-xl text-stone-500 hover:bg-stone-100">
                 ✕
             </button>
         </div>
@@ -42,7 +47,8 @@
 
             <!-- Kelompok 1: Pemantauan & Pasar Publik -->
             <div>
-                <p class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-stone-400">Ekosistem Pangan</p>
+                <p class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-stone-400">Ekosistem Pangan
+                </p>
                 <nav class="space-y-1">
                     <a href="{{ route('beranda') }}"
                         class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('beranda') ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100' }}">
@@ -70,57 +76,64 @@
             @auth
                 <!-- Kelompok 2: Panel Khusus Administrator -->
                 @if(auth()->user()->peran_sektor === 'admin')
-                <div>
-                    <p class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-amber-700">Administrator</p>
-                    <nav class="space-y-1">
-                        <a href="{{ route('admin.dashboard') }}"
-                            class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('admin.dashboard') ? 'bg-stone-800 text-white shadow-sm' : 'bg-amber-50 text-amber-950 hover:bg-amber-100' }}">
-                            <span>🏛️</span> <span>Dashboard & Moderasi</span>
-                        </a>
-                        <a href="{{ route('admin.komoditas') }}"
-                            class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('admin.komoditas') ? 'bg-stone-800 text-white' : 'text-stone-600 hover:bg-stone-100' }}">
-                            <span>🌾</span> <span>Master Komoditas</span>
-                        </a>
-                        <a href="{{ route('admin.pengguna') }}"
-                            class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('admin.pengguna') ? 'bg-stone-800 text-white' : 'text-stone-600 hover:bg-stone-100' }}">
-                            <span>👥</span> <span>Manajemen Pengguna</span>
-                        </a>
-                        <a href="{{ route('admin.panduan') }}"
-                            class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('admin.panduan') ? 'bg-stone-800 text-white' : 'text-stone-600 hover:bg-stone-100' }}">
-                            <span>📚</span> <span>Kelola Panduan Teknis</span>
-                        </a>
-                    </nav>
-                </div>
+                    <div>
+                        <p class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-amber-700">Administrator
+                        </p>
+                        <nav class="space-y-1">
+                            <a href="{{ route('admin.dashboard') }}"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('admin.dashboard') ? 'bg-stone-800 text-white shadow-sm' : 'bg-amber-50 text-amber-950 hover:bg-amber-100' }}">
+                                <span>🏛️</span> <span>Dashboard & Moderasi</span>
+                            </a>
+                            <a href="{{ route('admin.komoditas') }}"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('admin.komoditas') ? 'bg-stone-800 text-white' : 'text-stone-600 hover:bg-stone-100' }}">
+                                <span>🌾</span> <span>Master Komoditas</span>
+                            </a>
+                            <a href="{{ route('admin.wilayah') }}"
+                                class="flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-sm font-bold transition {{ request()->routeIs('admin.wilayah*') ? 'bg-stone-800 text-white' : 'text-stone-600 hover:bg-stone-100' }}">
+                                <span>🧭</span> Wilayah Distribusi SPK
+                            </a>
+                            <a href="{{ route('admin.pengguna') }}"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('admin.pengguna') ? 'bg-stone-800 text-white' : 'text-stone-600 hover:bg-stone-100' }}">
+                                <span>👥</span> <span>Manajemen Pengguna</span>
+                            </a>
+                            <a href="{{ route('admin.panduan') }}"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('admin.panduan') ? 'bg-stone-800 text-white' : 'text-stone-600 hover:bg-stone-100' }}">
+                                <span>📚</span> <span>Kelola Panduan Teknis</span>
+                            </a>
+                        </nav>
+                    </div>
                 @endif
 
                 <!-- Kelompok 3: Operasional Produsen -->
                 @if(in_array(auth()->user()->peran_sektor, ['petani', 'peternak', 'nelayan', 'pelaku_pangan']))
-                <div>
-                    <p class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-stone-400">Manajemen Usaha</p>
-                    <nav class="space-y-1">
-                        <a href="{{ route('siklus.index') }}"
-                            class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('siklus.*') ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100' }}">
-                            <span>🌱</span> <span>Siklus & Jadwal Rawat</span>
-                        </a>
-                        <a href="{{ route('produksi') }}"
-                            class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('produksi') ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100' }}">
-                            <span>📦</span> <span>Catatan Produksi</span>
-                        </a>
-                        <a href="{{ route('keuangan') }}"
-                            class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('keuangan') ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100' }}">
-                            <span>💰</span> <span>Pembukuan Keuangan</span>
-                        </a>
-                        <a href="{{ route('laporan') }}"
-                            class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('laporan') ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100' }}">
-                            <span>📊</span> <span>Laporan & Analisis</span>
-                        </a>
-                    </nav>
-                </div>
+                    <div>
+                        <p class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-stone-400">Manajemen Usaha
+                        </p>
+                        <nav class="space-y-1">
+                            <a href="{{ route('siklus.index') }}"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('siklus.*') ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100' }}">
+                                <span>🌱</span> <span>Siklus & Jadwal Rawat</span>
+                            </a>
+                            <a href="{{ route('produksi') }}"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('produksi') ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100' }}">
+                                <span>📦</span> <span>Catatan Produksi</span>
+                            </a>
+                            <a href="{{ route('keuangan') }}"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('keuangan') ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100' }}">
+                                <span>💰</span> <span>Pembukuan Keuangan</span>
+                            </a>
+                            <a href="{{ route('laporan') }}"
+                                class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('laporan') ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100' }}">
+                                <span>📊</span> <span>Laporan & Analisis</span>
+                            </a>
+                        </nav>
+                    </div>
                 @endif
 
                 <!-- Kelompok 4: Fitur Akun & Pantauan -->
                 <div>
-                    <p class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-stone-400">Akun & Peringatan</p>
+                    <p class="px-3 mb-2 text-[10px] font-extrabold uppercase tracking-wider text-stone-400">Akun &
+                        Peringatan</p>
                     <nav class="space-y-1">
                         <a href="{{ route('pantauan') }}"
                             class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('pantauan') ? 'bg-emerald-700 text-white shadow-sm' : 'text-stone-600 hover:bg-stone-100' }}">
@@ -149,7 +162,8 @@
                 <div class="flex items-center justify-between gap-2">
                     <a href="{{ route('profil') }}" class="min-w-0">
                         <p class="text-xs font-extrabold text-stone-800 truncate">{{ auth()->user()->name }}</p>
-                        <span class="inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800">
+                        <span
+                            class="inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800">
                             {{ str_replace('_', ' ', auth()->user()->peran_sektor) }}
                         </span>
                     </a>
@@ -163,10 +177,12 @@
                 </div>
             @else
                 <div class="grid grid-cols-2 gap-2">
-                    <a href="{{ route('login') }}" class="py-2 text-center rounded-xl border border-stone-300 bg-white hover:bg-stone-100 text-xs font-bold text-stone-700 transition">
+                    <a href="{{ route('login') }}"
+                        class="py-2 text-center rounded-xl border border-stone-300 bg-white hover:bg-stone-100 text-xs font-bold text-stone-700 transition">
                         Masuk
                     </a>
-                    <a href="{{ route('register') }}" class="py-2 text-center rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition">
+                    <a href="{{ route('register') }}"
+                        class="py-2 text-center rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition">
                         Daftar
                     </a>
                 </div>
@@ -178,7 +194,8 @@
     <div class="lg:pl-64 flex flex-col min-h-screen w-full">
 
         <!-- TOP BAR -->
-        <header class="h-16 bg-white border-b border-stone-200 sticky top-0 z-30 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+        <header
+            class="h-16 bg-white border-b border-stone-200 sticky top-0 z-30 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
             <div class="flex items-center gap-3">
                 <button type="button" onclick="toggleSidebar()"
                     class="lg:hidden p-2 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-100">
@@ -215,7 +232,8 @@
             @if(!auth()->user()->is_kontak_verified && !request()->routeIs('verifikasi.otp'))
                 <div class="bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-center text-xs text-amber-950">
                     Akun Anda belum terverifikasi OTP.
-                    <a href="{{ route('verifikasi.otp') }}" class="font-extrabold underline ml-1">Masukkan Kode Verifikasi Sekarang →</a>
+                    <a href="{{ route('verifikasi.otp') }}" class="font-extrabold underline ml-1">Masukkan Kode Verifikasi
+                        Sekarang →</a>
                 </div>
             @endif
         @endauth
@@ -223,13 +241,15 @@
         <!-- KONTEN HALAMAN -->
         <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
             @if(session('success'))
-                <div class="mb-5 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs sm:text-sm font-bold">
+                <div
+                    class="mb-5 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs sm:text-sm font-bold">
                     ✅ {{ session('success') }}
                 </div>
             @endif
 
             @if(session('error'))
-                <div class="mb-5 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm font-bold">
+                <div
+                    class="mb-5 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm font-bold">
                     ⛔ {{ session('error') }}
                 </div>
             @endif
@@ -240,7 +260,8 @@
 
         <!-- FOOTER -->
         <footer class="bg-white border-t border-stone-200 py-5 px-4 sm:px-6 lg:px-8 mt-10">
-            <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-stone-500">
+            <div
+                class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-stone-500">
                 <p class="font-bold text-stone-700">🌾 PanganKu Nasional — Sistem Terpadu Ketahanan & Niaga Pangan</p>
                 <p>Pertanian • Peternakan • Perikanan • Transparansi Harga & Pasokan</p>
             </div>
@@ -286,4 +307,5 @@
         });
     </script>
 </body>
+
 </html>
